@@ -1,26 +1,40 @@
-# Go
-backend/bin/
-*.test
-
-# Node
-web/node_modules/
-web/dist/
-
-# Env
+# Ignored files
 .env
-.env.local
+*.env.local
+
+# Backend
+backend/target/
+backend/.mvn/
+*.class
+*.jar
+
+# Frontend
+frontend/node_modules/
+frontend/dist/
+frontend/.next/
+frontend/.vite/
+
+# IDE
+.idea/
+*.iml
+.vscode/
+*.swp
+*.swo
 
 # OS
 .DS_Store
 Thumbs.db
 
-# Compiled workload binaries
-workloads/sample-service/sample-service
+# Logs
+*.log
+logs/
 
-# Maven
-control-plane/target/
+# Docker volumes data
+postgres_data/
+redis_data/
 
-# Python
+# AI Service
 ai-service/__pycache__/
-ai-service/**/__pycache__/
-ai-service/.pytest_cache/
+ai-service/.venv/
+ai-service/*.pyc
+ai-service/venv/

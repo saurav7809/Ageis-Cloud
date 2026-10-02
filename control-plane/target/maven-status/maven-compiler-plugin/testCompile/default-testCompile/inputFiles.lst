@@ -1,0 +1,15 @@
+C:\Users\gaura\.gemini\antigravity-ide\scratch\aegiscloud\control-plane\src\test\java\io\aegiscloud\controlplane\alerting\BurnRateAlertingTest.java
+C:\Users\gaura\.gemini\antigravity-ide\scratch\aegiscloud\control-plane\src\test\java\io\aegiscloud\controlplane\auth\RegistrationTest.java
+C:\Users\gaura\.gemini\antigravity-ide\scratch\aegiscloud\control-plane\src\test\java\io\aegiscloud\controlplane\CloudAgnosticBoundaryTest.java
+C:\Users\gaura\.gemini\antigravity-ide\scratch\aegiscloud\control-plane\src\test\java\io\aegiscloud\controlplane\engine\ClusterWatchServiceTest.java
+C:\Users\gaura\.gemini\antigravity-ide\scratch\aegiscloud\control-plane\src\test\java\io\aegiscloud\controlplane\engine\PolicyEngineTest.java
+C:\Users\gaura\.gemini\antigravity-ide\scratch\aegiscloud\control-plane\src\test\java\io\aegiscloud\controlplane\engine\ScalingEngineTest.java
+C:\Users\gaura\.gemini\antigravity-ide\scratch\aegiscloud\control-plane\src\test\java\io\aegiscloud\controlplane\engine\SelfHealingEngineTest.java
+C:\Users\gaura\.gemini\antigravity-ide\scratch\aegiscloud\control-plane\src\test\java\io\aegiscloud\controlplane\eval\MetricIngestionTest.java
+C:\Users\gaura\.gemini\antigravity-ide\scratch\aegiscloud\control-plane\src\test\java\io\aegiscloud\controlplane\eval\ProberAddressTest.java
+C:\Users\gaura\.gemini\antigravity-ide\scratch\aegiscloud\control-plane\src\test\java\io\aegiscloud\controlplane\eval\ReliabilityScoreTest.java
+C:\Users\gaura\.gemini\antigravity-ide\scratch\aegiscloud\control-plane\src\test\java\io\aegiscloud\controlplane\eval\SloEvaluatorTest.java
+C:\Users\gaura\.gemini\antigravity-ide\scratch\aegiscloud\control-plane\src\test\java\io\aegiscloud\controlplane\experiment\ExperimentSafetyTest.java
+C:\Users\gaura\.gemini\antigravity-ide\scratch\aegiscloud\control-plane\src\test\java\io\aegiscloud\controlplane\graph\ServiceGraphTest.java
+C:\Users\gaura\.gemini\antigravity-ide\scratch\aegiscloud\control-plane\src\test\java\io\aegiscloud\controlplane\optimize\OptimizationAdvisorTest.java
+C:\Users\gaura\.gemini\antigravity-ide\scratch\aegiscloud\control-plane\src\test\java\io\aegiscloud\controlplane\rca\RcaEngineTest.java

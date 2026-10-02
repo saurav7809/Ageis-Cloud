@@ -240,7 +240,18 @@ export interface LiveEvent {
     | "decision"
     | "scaling"
     | "healing"
-    | "outcome";
+    | "outcome"
+    | "probe"
+    | "evaluation"
+    | "experiment"
+    | "incident"
+    | "alert"
+    | "optimization"
+    | "recommendation"
+    | "dependency-discovered"
+    | "pod-unhealthy"
+    | "microservice-registered"
+    | "build";
   at: string;
   text: string;
 }
@@ -253,6 +264,17 @@ const LIVE_EVENTS = [
   "scaling",
   "healing",
   "outcome",
+  "probe",
+  "evaluation",
+  "experiment",
+  "incident",
+  "alert",
+  "optimization",
+  "recommendation",
+  "dependency-discovered",
+  "pod-unhealthy",
+  "microservice-registered",
+  "build",
 ] as const;
 
 /** Renders one raw stream payload as the sentence the operator reads. */
@@ -272,6 +294,28 @@ function describe(kind: LiveEvent["kind"], data: Record<string, unknown>): strin
       return `${data.target} — ${data.action} ${data.pod} (${data.failure})`;
     case "outcome":
       return `${data.target} — ${data.actionType} verified: ${data.outcome} (${data.scoreBefore}% to ${data.scoreAfter}% ready)`;
+    case "probe":
+      return `${data.target} probed ${data.success ? "ok" : "FAILED"} in ${data.latencyMs}ms`;
+    case "evaluation":
+      return `evaluated ${data.probed} endpoint(s), ${data.slos} SLO(s), ${data.scores} score(s)`;
+    case "experiment":
+      return `${data.target} — experiment ${data.status}${data.fault ? ` (${data.fault})` : ""}`;
+    case "incident":
+      return `incident: ${data.title} — ${data.summary}`;
+    case "alert":
+      return `${data.severity}: ${data.message}`;
+    case "optimization":
+      return `${data.recommendations} recommendation(s), ${data.withheld} withheld`;
+    case "recommendation":
+      return `${data.target} — recommendation ${data.status}: ${data.detail}`;
+    case "dependency-discovered":
+      return `${data.edgesRecorded} dependency edge(s) proved by taking ${data.outageService} down`;
+    case "pod-unhealthy":
+      return `${data.target} — pod ${data.pod} is unhealthy`;
+    case "microservice-registered":
+      return `${data.name} registered in ${data.namespace} from ${data.image}`;
+    case "build":
+      return `build ${data.status}: ${data.image}`;
   }
 }
 

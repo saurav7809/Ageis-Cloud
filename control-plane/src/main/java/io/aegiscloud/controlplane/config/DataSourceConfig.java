@@ -24,7 +24,7 @@ public class DataSourceConfig {
 
     @Bean
     public DataSource dataSource(
-            @Value("${DATABASE_URL:postgres://aegiscloud:aegiscloud@localhost:5432/aegiscloud?sslmode=disable}")
+            @Value("${DATABASE_URL:postgres://aegiscloud:aegiscloud@localhost:5433/aegiscloud?sslmode=disable}")
             String databaseUrl) {
 
         DatabaseUrl parsed = DatabaseUrl.parse(databaseUrl);

@@ -1,71 +1,69 @@
+# AegisCloud Local Development Stack
+# Starts PostgreSQL 16 and Redis 7 for local development.
+#
+# Credentials match the defaults baked into control-plane DataSourceConfig
+# and RedisConfig so that `mvnw.cmd spring-boot:run -Dspring-boot.run.profiles=dev`
+# starts without any environment variable overrides.
+#
+# Usage:
+#   docker compose up -d        # start
+#   docker compose down -v      # stop + wipe volumes
+
 services:
+  # ──────────────────────────────────────────────────────────
+  # PostgreSQL 16
+  # URL: postgres://aegiscloud:aegiscloud@localhost:5432/aegiscloud
+  # ──────────────────────────────────────────────────────────
   postgres:
     image: postgres:16-alpine
+    container_name: aegiscloud-postgres
+    restart: unless-stopped
     environment:
-      POSTGRES_USER: aegiscloud
+      POSTGRES_DB:       aegiscloud
+      POSTGRES_USER:     aegiscloud
       POSTGRES_PASSWORD: aegiscloud
-      POSTGRES_DB: aegiscloud
+      PGDATA:            /var/lib/postgresql/data/pgdata
     ports:
-      # Published on 55432, not 5432. A locally-installed PostgreSQL is extremely
-      # common on developer machines and silently wins the default port, which
-      # surfaces as "password authentication failed" against a database that is
-      # not this one. Containers still reach each other on postgres:5432.
-      - "55432:5432"
+      - "5433:5432"
     volumes:
-      - pgdata:/var/lib/postgresql/data
+      - postgres_data:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U aegiscloud -d aegiscloud"]
-      interval: 5s
-      timeout: 3s
-      retries: 10
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
 
+  # ──────────────────────────────────────────────────────────
+  # Redis 7 — caching, locks, coordination
+  # No password required for local development
+  # ──────────────────────────────────────────────────────────
   redis:
     image: redis:7-alpine
-    # No persistence: everything here is a cache, and losing it must be
-    # survivable by design.
-    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    container_name: aegiscloud-redis
+    restart: unless-stopped
+    command: >
+      redis-server
+      --maxmemory 256mb
+      --maxmemory-policy allkeys-lru
+      --save ""
     ports:
       - "6379:6379"
+    volumes:
+      - redis_data:/data
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
-      interval: 5s
+      interval: 10s
       timeout: 3s
-      retries: 10
-
-  control-plane:
-    build: ./control-plane
-    ports:
-      - "8080:8080"
-    environment:
-      # Containers reach PostgreSQL on its own network at the standard port; only
-      # the host-published port is remapped (see the postgres service above).
-      DATABASE_URL: postgres://aegiscloud:aegiscloud@postgres:5432/aegiscloud?sslmode=disable
-      REDIS_ADDR: redis:6379
-      AEGISCLOUD_ADMIN_EMAIL: admin@aegiscloud.local
-      AEGISCLOUD_ADMIN_PASSWORD: changeme123
-      AEGISCLOUD_JWT_SECRET: dev-secret-change-me
-      AEGISCLOUD_WEB_ORIGIN: http://localhost:5173
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-
-  web:
-    image: node:20-alpine
-    working_dir: /app
-    volumes:
-      - ./web:/app
-      - web-node-modules:/app/node_modules
-    command: sh -c "npm install && npm run dev -- --host"
-    ports:
-      - "5173:5173"
-    environment:
-      VITE_API_URL: http://localhost:8080
-      NODE_OPTIONS: --max-old-space-size=1024
-    depends_on:
-      - control-plane
+      retries: 5
+      start_period: 5s
 
 volumes:
-  pgdata:
-  web-node-modules:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+
+networks:
+  default:
+    name: aegiscloud-network

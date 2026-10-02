@@ -8,6 +8,7 @@ import {
   type Recommendation,
 } from "../api/client";
 import { Badge, Card } from "../components/ui";
+import { useLiveRefresh } from "../components/LiveEvents";
 
 const IMPACT_TONE: Record<string, "good" | "warn" | "bad" | "info"> = {
   NONE: "good",
@@ -46,6 +47,8 @@ export function OptimizationPage({ token }: { token: string }) {
   useEffect(() => {
     refresh();
   }, [refresh]);
+
+  useLiveRefresh(["optimization", "recommendation"], refresh);
 
   async function reexamine() {
     setBusy(true);

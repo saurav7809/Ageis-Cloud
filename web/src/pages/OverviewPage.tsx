@@ -1,8 +1,111 @@
+import { useEffect, useState } from "react";
+import { useLiveRefresh } from "../components/LiveEvents";
 import type { Overview } from "../api/client";
-import { Card, Stat, StatusBadge, money, timeAgo, DemoNote } from "../components/ui";
+import { Card, Stat, StatusBadge, money, timeAgo } from "../components/ui";
 import { TrendChart, ProviderBars } from "../components/Charts";
 
-export function OverviewPage({ data }: { data: Overview }) {
+const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:8080";
+
+interface ClusterSyncSummary {
+  totalClusters: number;
+  liveClusters: number;
+  inventoryClusters: number;
+  healthyClusters: number;
+  hasLiveData: boolean;
+  lastLiveSyncAt: string | null;
+  syncIntervalSeconds: number;
+}
+
+function LiveStatusBar({ token }: { token?: string }) {
+  const [summary, setSummary] = useState<ClusterSyncSummary | null>(null);
+  const [secondsAgo, setSecondsAgo] = useState(0);
+
+  useEffect(() => {
+    const load = () => {
+      fetch(`${API_URL}/api/v1/cluster-status/summary`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+        .then((r) => r.json())
+        .then((d) => {
+          setSummary(d);
+          setSecondsAgo(0);
+        })
+        .catch(() => {});
+    };
+    load();
+  }, [token]);
+
+  useLiveRefresh(["live-sync", "evaluation"], () => {
+    fetch(`${API_URL}/api/v1/cluster-status/summary`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then((r) => r.json())
+      .then((d) => {
+        setSummary(d);
+        setSecondsAgo(0);
+      })
+      .catch(() => {});
+  });
+
+  // Tick the seconds counter each second
+  useEffect(() => {
+    const t = setInterval(() => setSecondsAgo((s) => s + 1), 1000);
+    return () => clearInterval(t);
+  }, [summary]);
+
+  if (!summary) return null;
+
+  const isLive = summary.hasLiveData && summary.liveClusters > 0;
+
+  return (
+    <div style={{
+      display: "flex",
+      alignItems: "center",
+      gap: 16,
+      padding: "10px 18px",
+      background: isLive ? "#0a1f12" : "#1a1205",
+      border: `1px solid ${isLive ? "#166534" : "#713f12"}`,
+      borderRadius: 10,
+      marginBottom: 8,
+      flexWrap: "wrap",
+    }}>
+      {/* Pulsing dot */}
+      <span style={{ position: "relative", display: "inline-flex", alignItems: "center" }}>
+        <span style={{
+          width: 8, height: 8, borderRadius: "50%",
+          background: isLive ? "#22c55e" : "#f59e0b",
+          boxShadow: isLive ? "0 0 0 0 #22c55e88" : "0 0 0 0 #f59e0b88",
+          animation: "pulse-dot 1.8s ease-in-out infinite",
+          display: "inline-block",
+        }} />
+      </span>
+
+      <div style={{ flex: 1 }}>
+        <span style={{ fontWeight: 700, fontSize: 13, color: isLive ? "#86efac" : "#fbbf24" }}>
+          {isLive ? "Live data — all readings are real" : "Partial live — some clusters are inventory only"}
+        </span>
+        <span style={{ fontSize: 12, color: "#64748b", marginLeft: 12 }}>
+          {summary.liveClusters} live-connected
+          {summary.inventoryClusters > 0 && ` · ${summary.inventoryClusters} cloud inventory (no kubeconfig)`}
+        </span>
+      </div>
+
+      <div style={{ fontSize: 12, color: "#475569", textAlign: "right" }}>
+        {isLive ? (
+          <>
+            <span style={{ color: "#94a3b8" }}>Synced </span>
+            <span style={{ color: "#c4b5fd", fontWeight: 600 }}>{secondsAgo}s ago</span>
+            <span style={{ color: "#334155" }}> · every {summary.syncIntervalSeconds}s</span>
+          </>
+        ) : (
+          <span style={{ color: "#92400e" }}>Add kubeconfig to enable live sync</span>
+        )}
+      </div>
+    </div>
+  );
+}
+
+export function OverviewPage({ data, token }: { data: Overview; token?: string }) {
   return (
     <>
       <div className="page-head">
@@ -13,11 +116,7 @@ export function OverviewPage({ data }: { data: Overview }) {
         </p>
       </div>
 
-      <DemoNote>
-        <strong>Seeded demo fleet.</strong> Clusters, services and metrics below are
-        generated sample data served from the real API contract. Live readings begin in
-        Phase&nbsp;3, when the Deployment Engine connects to clusters via client-go.
-      </DemoNote>
+      <LiveStatusBar token={token} />
 
       <div className="grid stat-row">
         <Stat
@@ -112,6 +211,14 @@ export function OverviewPage({ data }: { data: Overview }) {
           </Card>
         </div>
       </div>
+
+      <style>{`
+        @keyframes pulse-dot {
+          0%   { box-shadow: 0 0 0 0 currentColor; }
+          70%  { box-shadow: 0 0 0 6px transparent; }
+          100% { box-shadow: 0 0 0 0 transparent; }
+        }
+      `}</style>
     </>
   );
 }

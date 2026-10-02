@@ -3,6 +3,7 @@ package io.aegiscloud.controlplane.web;
 import io.aegiscloud.controlplane.audit.AuditLog;
 import io.aegiscloud.controlplane.auth.Tenant;
 import io.aegiscloud.controlplane.build.BuildStore;
+import io.aegiscloud.controlplane.engine.ControlPlaneEvents;
 import io.aegiscloud.controlplane.domain.Models;
 import io.aegiscloud.controlplane.eval.EvaluationStore;
 import io.aegiscloud.controlplane.k8s.DeploymentEngine;
@@ -55,11 +56,12 @@ public class MicroserviceController {
     private final WorkloadOperations workloads;
     private final BuildStore builds;
     private final AuditLog audit;
+    private final ControlPlaneEvents events;
 
     public MicroserviceController(DeploymentEngine engine, TargetRegistry targets,
                                   EvaluationStore evaluation, ClusterRepository clusters,
                                   WorkloadOperations workloads, BuildStore builds,
-                                  AuditLog audit) {
+                                  AuditLog audit, ControlPlaneEvents events) {
         this.engine = engine;
         this.targets = targets;
         this.evaluation = evaluation;
@@ -67,6 +69,7 @@ public class MicroserviceController {
         this.workloads = workloads;
         this.builds = builds;
         this.audit = audit;
+        this.events = events;
     }
 
     /**
@@ -190,6 +193,15 @@ public class MicroserviceController {
                         "namespace", namespace, "replicas", request.replicas()));
 
         log.info("registered microservice {} in {}", request.name(), namespace);
+
+        // Announced so every open dashboard updates, not only the one that did it.
+        // A platform whose own screens disagree about what is registered is a
+        // platform people stop trusting for the state of anything else.
+        events.broadcast("microservice-registered", Map.of(
+                "name", request.name(),
+                "namespace", namespace,
+                "image", request.image(),
+                "replicas", request.replicas()));
 
         return new RegisterResult(serviceId.toString(), targetId.toString(), request.name(),
                 namespace, true, true, true, steps,

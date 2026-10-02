@@ -226,6 +226,25 @@ public class EvaluationStore {
 
     // ------------------------------------------------------------------ scores
 
+    /**
+     * The latest scored metric values for a target — reads the denormalised
+     * columns that the evaluation engine refreshes after every probe cycle.
+     * Keys: AVAILABILITY, LATENCY_P95, RELIABILITY.
+     */
+    public java.util.Map<String, Double> latestScores(UUID targetId) {
+        return jdbc.query("""
+                SELECT reliability_score, availability_pct, latency_p95_ms
+                FROM deployment_target WHERE id = ?
+                """, rs -> {
+            if (!rs.next()) return java.util.Map.of();
+            return java.util.Map.of(
+                    "RELIABILITY", rs.getDouble("reliability_score"),
+                    "AVAILABILITY", rs.getDouble("availability_pct"),
+                    "LATENCY_P95", rs.getDouble("latency_p95_ms")
+            );
+        }, targetId);
+    }
+
     public void recordScore(UUID targetId, Instant windowStart, Instant windowEnd, double score) {
         jdbc.update("""
                 INSERT INTO reliability_score_snapshot (target_id, window_start, window_end, score)

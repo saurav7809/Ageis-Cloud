@@ -188,6 +188,9 @@ public class OptimizationService {
         if (!permitted.allowed()) {
             store.close(recommendationId, "DISMISSED", actor,
                     "refused by policy: " + permitted.reason());
+            events.broadcast("recommendation", Map.of(
+                    "target", target.label(), "status", "DISMISSED",
+                    "detail", "refused by policy: " + permitted.reason()));
             return new ApplyResult(recommendationId.toString(), "DISMISSED",
                     "refused by policy: " + permitted.reason());
         }
@@ -229,6 +232,14 @@ public class OptimizationService {
 
         store.close(recommendationId, "DISMISSED", actor,
                 reason == null || reason.isBlank() ? "dismissed without a reason" : reason);
+
+        // Broadcast for the same reason applying does: advice that has been retired
+        // must leave every open screen, not only the one that retired it. Two
+        // operators disagreeing about whether a recommendation still stands is the
+        // failure this stream exists to prevent.
+        events.broadcast("recommendation", Map.of(
+                "target", recommendation.serviceName(), "status", "DISMISSED",
+                "detail", recommendation.title()));
 
         return new ApplyResult(recommendationId.toString(), "DISMISSED",
                 "dismissed; the recommendation stays on record");

@@ -1,0 +1,101 @@
+spring:
+  application:
+    name: aegiscloud-backend
+
+  # -------------------------------------------------------
+  # Database — PostgreSQL 16
+  # Local dev: matches docker-compose.yml defaults
+  # -------------------------------------------------------
+  datasource:
+    url: jdbc:postgresql://localhost:5432/aegiscloud
+    username: aegiscloud
+    password: aegiscloud_dev_2024
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 2
+      connection-timeout: 30000
+      idle-timeout: 600000
+      max-lifetime: 1800000
+
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    show-sql: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: true
+        default_schema: public
+
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    baseline-on-migrate: true
+    validate-on-migrate: true
+
+  # -------------------------------------------------------
+  # Redis 7
+  # -------------------------------------------------------
+  data:
+    redis:
+      host: localhost
+      port: 6379
+      timeout: 2000ms
+      lettuce:
+        pool:
+          max-active: 8
+          max-idle: 8
+          min-idle: 2
+
+  jackson:
+    serialization:
+      write-dates-as-timestamps: false
+    deserialization:
+      fail-on-unknown-properties: false
+    default-property-inclusion: non_null
+
+server:
+  port: 8080
+  error:
+    include-message: always
+    include-binding-errors: always
+
+logging:
+  level:
+    root: INFO
+    com.aegiscloud: DEBUG
+    io.fabric8: WARN
+    org.springframework.security: WARN
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      show-details: always
+
+aegiscloud:
+  security:
+    jwt:
+      secret: ZGV2LXNlY3JldC1rZXktZm9yLWxvY2FsLWRldmVsb3BtZW50LW9ubHktbm90LWZvci1wcm9kdWN0aW9u
+      expiration-ms: 86400000
+
+  kubernetes:
+    context: docker-desktop
+    in-cluster: false
+    default-namespace: aegiscloud
+    connection-timeout-seconds: 30
+
+  ai-service:
+    base-url: http://localhost:8090
+    timeout-seconds: 30
+
+  cors:
+    allowed-origins:
+      - http://localhost:5173
+      - http://localhost:3000

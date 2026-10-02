@@ -1,6 +1,7 @@
 package io.aegiscloud.controlplane.build;
 
 import io.aegiscloud.controlplane.audit.AuditLog;
+import io.aegiscloud.controlplane.engine.ControlPlaneEvents;
 import io.aegiscloud.controlplane.k8s.KubernetesClientFactory;
 import io.aegiscloud.controlplane.persistence.ClusterEntity;
 import io.aegiscloud.controlplane.persistence.ClusterRepository;
@@ -52,17 +53,19 @@ public class ImageBuildService {
     private final ClusterRepository clusters;
     private final BuildStore store;
     private final AuditLog audit;
+    private final ControlPlaneEvents events;
     private final String registry;
     private final boolean registryInsecure;
 
     public ImageBuildService(KubernetesClientFactory clients, ClusterRepository clusters,
-                             BuildStore store, AuditLog audit,
+                             BuildStore store, AuditLog audit, ControlPlaneEvents events,
                              @Value("${aegiscloud.registry.url:}") String registry,
                              @Value("${aegiscloud.registry.insecure:true}") boolean registryInsecure) {
         this.clients = clients;
         this.clusters = clusters;
         this.store = store;
         this.audit = audit;
+        this.events = events;
         this.registry = registry == null ? "" : registry.replaceAll("/$", "");
         this.registryInsecure = registryInsecure;
     }
@@ -140,6 +143,9 @@ public class ImageBuildService {
 
         audit.recordUserAction("BUILD_IMAGE", "image_build", buildId.toString(),
                 Map.of("image", image, "gitUrl", request.gitUrl(), "ref", request.gitRef()));
+
+        events.broadcast("build", Map.of(
+                "buildId", buildId.toString(), "image", image, "status", "RUNNING"));
 
         return new BuildStarted(buildId.toString(), image, jobName,
                 "build running; poll /api/v1/builds/" + buildId);
@@ -245,9 +251,14 @@ public class ImageBuildService {
             if (succeeded != null && succeeded > 0) {
                 store.finish(build.id(), "SUCCEEDED", "image pushed to the registry");
                 log.info("build {} succeeded", build.id());
+                events.broadcast("build", Map.of("buildId", build.id().toString(),
+                        "image", build.image(), "status", "SUCCEEDED"));
             } else if (failed != null && failed > 0) {
-                store.finish(build.id(), "FAILED", lastLogLine(client, build.jobName()));
+                String detail = lastLogLine(client, build.jobName());
+                store.finish(build.id(), "FAILED", detail);
                 log.info("build {} failed", build.id());
+                events.broadcast("build", Map.of("buildId", build.id().toString(),
+                        "image", build.image(), "status", "FAILED", "detail", detail));
             }
         }
     }

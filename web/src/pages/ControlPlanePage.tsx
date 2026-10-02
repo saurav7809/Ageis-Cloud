@@ -5,11 +5,9 @@ import { LiveActivity } from "../components/LiveActivity";
 export function ControlPlanePage({
   scaling,
   healing,
-  token,
 }: {
   scaling: ScalingEvent[];
   healing: HealingEvent[];
-  token: string;
 }) {
   return (
     <>
@@ -21,7 +19,7 @@ export function ControlPlanePage({
         </p>
       </div>
 
-      <LiveActivity token={token} />
+      <LiveActivity />
 
       <Card title="Auto-Scaling Decisions" meta={`${scaling.length} events`}>
         <div className="table-wrap">

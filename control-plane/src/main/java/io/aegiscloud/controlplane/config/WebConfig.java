@@ -28,7 +28,7 @@ public class WebConfig {
 
     private final List<String> origins;
 
-    public WebConfig(@Value("${AEGISCLOUD_WEB_ORIGIN:http://localhost:5173}") String rawOrigins) {
+    public WebConfig(@Value("${AEGISCLOUD_WEB_ORIGIN:http://localhost:5173,http://localhost:5174}") String rawOrigins) {
         this.origins = Arrays.stream(rawOrigins.split(","))
                 .map(String::trim)
                 .filter(s -> !s.isEmpty())

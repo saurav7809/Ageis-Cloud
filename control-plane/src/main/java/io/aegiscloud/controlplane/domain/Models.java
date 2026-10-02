@@ -30,7 +30,7 @@ public final class Models {
     }
 
     public enum DeploymentStatus {
-        HEALTHY, DEGRADED, DEPLOYING, FAILED
+        HEALTHY, DEGRADED, DEPLOYING, FAILED, DOWN
     }
 
     public enum ScalingStrategy {

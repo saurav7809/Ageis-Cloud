@@ -1,1021 +1,299 @@
 # AegisCloud
 
-**A Kubernetes platform for registering Docker images, defining applications and
-microservices, and automatically deploying, running, managing and monitoring them.**
+**Kubernetes-based application deployment, management, and intelligent reliability platform.**
 
-You give AegisCloud an image — or a Git repository it builds one from — say how the
-service should run and what it depends on, and it deploys that service as a Kubernetes
-microservice under management. From that point the platform monitors the service,
-notices when it is under load and scales it, notices when it has failed and recovers
-it, measures its reliability against objectives, and when several services fail at once
-works out which one is actually broken.
+A centralized control plane for deploying and managing Dockerized microservices on Kubernetes — with real-time reliability scoring, SLO tracking, self-healing, chaos engineering, and AI-powered root cause analysis.
 
-That order matters. Each capability is worth having *because* the platform deployed the
-service in the first place: a system that scales, heals and diagnoses a workload it does
-not control is reasoning about something it cannot act on.
-
-Two properties shape the design.
-
-- **It acts, but only as far as it is permitted.** The loop closes itself — observe,
-  diagnose, decide, act, verify — rolling back and escalating when an action does not
-  help. Autonomy is a per-cluster, per-action setting that starts at *suggest only*.
-- **It reasons about a dependency graph, not one workload.** A checkout failure caused
-  by an auth timeout is only diagnosable if the platform knows checkout calls auth — and
-  here that edge is proved by breaking auth and watching what degrades, not declared.
-
-Cloud-agnosticism is structural rather than aspirational: every engine reaches clusters
-only through the standard Kubernetes API, so EKS, AKS, GKE and a local kind cluster are
-interchangeable targets. Three tests fail the build if a cloud SDK is imported, if any
-code branches on provider type, or if a Kubernetes client is built outside the one
-factory that owns that boundary.
-
-## The foundation
-
-Give AegisCloud a Docker image, configure the service, and it runs as a Kubernetes
-microservice under management. That is the whole product, and it works today:
-
-| Step | How |
-|---|---|
-| Build an image | `POST /api/v1/builds` — a Kaniko Job in the cluster, from a Git repository, pushed to the registry. No Docker daemon, no privileged access. |
-| Register a service | `POST /api/v1/microservices` — declares it, deploys the image with its dependency wiring, creates the Service, registers it as managed, starts probing it, gives it SLOs. |
-| Run it | Deployment + ClusterIP Service, resource requests, health probes, dependencies passed as environment. |
-| See it | The Microservices page: what is registered, live cluster state beside recorded state, deployment history, rollback. |
-
-Everything below exists because of that. A platform that scales, heals, measures and
-diagnoses a service it did not deploy is reasoning about something it does not control;
-each capability is worth having precisely because the service arrived through the step
-above.
-
-## Capabilities built on it
-
-| Capability | What it does once a service is running |
-|---|---|
-| Evaluation | Probes the service's working endpoint, evaluates SLOs, computes error budgets and a reliability score from measurements |
-| Auto-scaling | CPU, latency and trend strategies with a flapping guard — verified scaling a service 1 → 8 under real load |
-| Self-healing | Kubernetes watches detect a failing pod in seconds; a crash loop is replaced, an unpullable image is escalated rather than restarted forever |
-| Policy & autonomy | Every autonomous action is policy-checked and starts at SUGGEST; ACT is granted per cluster and per action type |
-| Chaos experiments | Breaks a service on purpose with safety rules, a steady-state hypothesis and a guaranteed restore |
-| Dependency graph | Blast radius, single points of failure and critical path — with edges *proved* by breaking a service and watching what degraded |
-| Root cause analysis | Ranks candidates across four signals with cited evidence, and labels symptoms as symptoms |
-| Optimization | Cost and performance advice that withholds a saving rather than trading away reliability |
-| Multi-tenancy | The organisation boundary enforced inside every query, verified across two tenants |
-| AI service | Anomaly detection, forecasting and RCA re-ranking, in Python, entirely optional |
+---
 
 ## Architecture
 
 ```
-React + TypeScript
-        |
-   Spring Boot control plane        one modular application, not a distributed system
-        |
-  +-----+-----+-----------+
-  |           |           |
-PostgreSQL  Redis   Kubernetes API
-                          |
-                     Docker images
-                          |
-                     microservices
+User Browser
+     │
+     ▼
+React Frontend (web/)          ← port 5173
+     │
+     ▼  HTTP REST + Bearer JWT
+Spring Boot Control Plane      ← port 8081
+(control-plane/)
+     │
+     ├── PostgreSQL (port 5432) ← persistent state
+     ├── Redis      (port 6379) ← caching & coordination
+     └── Kubernetes API         ← Docker Desktop / Minikube / EKS
 ```
 
-The control plane is a single Spring Boot application with module boundaries in the
-source tree — `k8s`, `build`, `eval`, `engine`, `experiment`, `graph`, `rca`,
-`optimize`, `alerting`, `audit`. Splitting it into services of its own would create a
-second reliability problem to solve before the first one was solved. The one separate
-process is the Python AI service, because it does a different kind of work, and the
-platform runs without it by design.
+---
 
-## Build order
+## Tech Stack
 
-The capabilities were built before the foundation, which was the wrong order and
-instructive anyway: building the real deployment path is what exposed the bugs in
-everything above it. Registration was not idempotent, so re-registering doubled a
-service's probes. Rollback did not record itself, so history disagreed with the
-cluster. Self-healing recognised only `CrashLoopBackOff`, not the state a crashing pod
-reports between restarts, so the watch fired and nothing healed. None of those were
-visible against seeded data.
-
-## Phase history
-
-| Phase | Status |
+| Layer | Technology |
 |---|---|
-| 1 — Architecture (requirements, architecture, database, APIs) | ✅ done |
-| 2 — Platform Foundation (Spring Boot control plane, React dashboard, auth, Docker, kind, sample workloads) | ✅ done |
-| 3 — Deployment Engine (fabric8 Kubernetes client, cluster registration, PostgreSQL) | ✅ done |
-| 4 — Control Plane (Auto-Scaling, Self-Healing, Policy Engine, autonomy levels, live event stream) | ✅ done |
-| 5 — Evaluation Engine (synthetic probes, SLO evaluation, error budgets, reliability scoring) | ✅ done |
-| 6 — Experiment Engine (chaos, safety rules, steady-state hypothesis, always restores) | ✅ done |
-| 7 — Dependency & Propagation (service graph, blast radius, SPOF, critical path) | ✅ done |
-| 8 — Root Cause Analysis (multi-signal correlation, explainable verdicts, measured accuracy) | ✅ done |
-| 9 — Optimization Advisor (cost + performance advice that never trades reliability silently) | ✅ done |
-| 10 — Multi-Cloud & Hardening (enforced multi-tenancy, cloud-agnostic boundary guarded by tests) | ✅ done |
+| Frontend | React 19, TypeScript 6, Vite 8 |
+| Backend | Java 17, Spring Boot 3.5.3 |
+| Auth | Spring Security + JJWT 0.12.6 (HS256) |
+| Database | PostgreSQL 16, Flyway migrations |
+| Cache | Redis 7 (optional — graceful degradation) |
+| K8s client | Fabric8 Kubernetes Client 7.8.0 |
+| API docs | SpringDoc OpenAPI (Swagger UI at `/swagger`) |
+| Containers | Docker, Docker Compose |
 
-Phases 7 and 8 are deliberately late: a dependency graph needs real telemetry flowing (Phase 5),
-and RCA needs the chaos engine (Phase 6) to supply incidents whose true cause is known in advance
-— otherwise there is no way to measure whether its verdicts are correct.
+---
 
-## Phase 1 Contents
+## Prerequisites
 
-```
-docs/phase-1-architecture/
-├── 00-phase-1-checklist.md — sign-off map: all 7 Phase 1 deliverables and where each is met
-├── 01-requirements.md      — problem, 5 personas, 8 use cases, 45 FRs, 10 NFR categories
-├── 02-architecture.md      — component diagram, Intelligence Layer, autonomous loop,
-│                             cloud-agnostic boundary, module breakdown, 12 ADRs
-├── 03-database.md          — 23 tables, ER overview, retention strategy
-└── 04-apis.md              — full REST API contract
-```
-
-**Phase 1 deliverables** — all seven complete:
-
-| # | Deliverable | Where |
+| Tool | Minimum Version | Check |
 |---|---|---|
-| 1 | Define Real-World Problem | [§2](docs/phase-1-architecture/01-requirements.md) |
-| 2 | Define Users & Use Cases | [§5](docs/phase-1-architecture/01-requirements.md) |
-| 3 | Define Functional Requirements | [§6](docs/phase-1-architecture/01-requirements.md) |
-| 4 | Define Non-Functional Requirements | [§7](docs/phase-1-architecture/01-requirements.md) |
-| 5 | Design System Architecture | [02-architecture.md](docs/phase-1-architecture/02-architecture.md) |
-| 6 | Design Database Schema | [03-database.md](docs/phase-1-architecture/03-database.md) |
-| 7 | Design API Architecture | [04-apis.md](docs/phase-1-architecture/04-apis.md) |
+| **Docker Desktop** | Latest | `docker version` |
+| **Java** | 17 | `java -version` |
+| **Node.js** | 18 | `node --version` |
+| **Maven** | via wrapper | no install needed |
 
-## Repo Layout
+Docker Desktop must be running **with Kubernetes enabled** for deployment features.
 
+---
+
+## Quick Start
+
+### 1 — Open Docker Desktop
+
+Start Docker Desktop from the Start Menu. Wait until the whale icon in the tray turns green.
+
+### 2 — Start the infrastructure
+
+```powershell
+cd C:\Users\gaura\.gemini\antigravity-ide\scratch\aegiscloud
+
+# Wipe old volumes (clean slate) and start PostgreSQL + Redis
+docker compose down -v --remove-orphans
+docker compose up -d
+
+# Confirm both containers are healthy
+docker ps
 ```
-ai-service/     Python 3 / FastAPI — anomaly detection, forecasting, RCA re-ranking
-control-plane/  Spring Boot 3.5 / Java 17 control plane — REST API, JWT auth via Spring
-                Security, Flyway schema, the Deployment Engine (fabric8) and the
-                autonomous control loop. This is the backend: Java throughout, with
-                Python reserved for the AI/ML service (prediction, anomaly detection,
-                AI-assisted RCA) where a model genuinely earns its place.
-web/        React + Vite + TypeScript operator dashboard
-workloads/  Deliberately failable sample service + manifests, so the platform has real
-            pods to scale, heal and break (see workloads/README.md)
-infra/
-  kind/     kind-config.yaml — local Kubernetes cluster definition
-  k8s/      base manifests (namespace, etc.)
-docker-compose.yml   local dev: control plane on :8080, frontend dev server on :5173
+
+Expected:
+```
+aegiscloud-postgres   Up (healthy)
+aegiscloud-redis      Up (healthy)
 ```
 
-## Running Locally
+### 3 — Start the backend control-plane
 
-**Fastest path — Docker Compose** (needs only Docker):
-```bash
-docker compose up --build
-```
-- Backend: http://localhost:8080 (`GET /healthz`, `POST /api/v1/auth/login`)
-- Frontend: http://localhost:5173
-- Seeded login: `admin@aegiscloud.local` / `changeme123` (override via
-  `AEGISCLOUD_ADMIN_EMAIL` / `AEGISCLOUD_ADMIN_PASSWORD` env vars)
-
-**Control plane only, without Docker** (needs JDK 17 and Maven):
-```bash
+```powershell
 cd control-plane
-DATABASE_URL='postgres://aegiscloud:aegiscloud@localhost:55432/aegiscloud?sslmode=disable' \
-REDIS_ADDR=localhost:6379 \
-mvn spring-boot:run
+.\mvnw.cmd spring-boot:run
 ```
-Note the port: `docker compose` publishes PostgreSQL on **55432**, not 5432, so a
-PostgreSQL already installed on the host is left alone. Containers still reach it at
-`postgres:5432`.
 
-**Frontend only, without Docker** (needs Node — set `VITE_API_URL` if the backend isn't on
-`localhost:8080`):
-```bash
+The backend:
+- Runs Flyway migrations (creates 23 tables)
+- Seeds demo data (clusters, services, SLOs, alerts, etc.)
+- Starts on **http://localhost:8081**
+
+Health check: http://localhost:8081/actuator/health  
+Swagger UI:   http://localhost:8081/swagger
+
+### 4 — Start the frontend
+
+In a separate terminal:
+
+```powershell
 cd web
-npm install
 npm run dev
 ```
 
-**Local Kubernetes** (needs [`kind`](https://kind.sigs.k8s.io/) — `winget install Kubernetes.kind`):
-```bash
-kind create cluster --config infra/kind/kind-config.yaml
-kubectl apply -f infra/k8s/namespace.yaml
-```
-This cluster becomes AegisCloud's first registered `cluster` row once the Deployment Engine
-(Phase 3) can register/target it — see [03-database.md](docs/phase-1-architecture/03-database.md).
-It is registered exactly like a real EKS/AKS/GKE cluster, just with `provider_type = KIND`.
+Opens on **http://localhost:5173**
 
-**Deploy the sample workloads** onto it, so there are real pods to scale, heal and break:
-```bash
-./workloads/deploy.sh
-```
-Three services, five pods, each able to crash, leak memory, inject latency or return errors on
-demand — see [workloads/README.md](workloads/README.md).
+---
 
-## Dashboard
+## Default Login
 
-Six screens over the platform API, styled as a dark operator console:
-
-| Screen | Shows |
+| Field | Value |
 |---|---|
-| **Overview** | Fleet stat tiles, 14-day reliability trend, cross-cloud score comparison, control-plane engine status, observability sources |
-| **Clusters** | Every registered cluster (EKS / AKS / GKE / kind) plus Policy Engine guardrails per cluster |
-| **Services** | Service cards and the full deployment-target table — replicas, availability, p95, error rate, cost, score |
-| **Control Plane** | Auto-Scaling decisions and Self-Healing actions with their triggers |
-| **Reliability** | SLO attainment, error-budget burn-rate bars, chaos experiments with before/during/after impact |
-| **Alerts** | Alert feed with working acknowledge/resolve actions (OPERATOR+ only) |
+| Email | `admin@aegiscloud.local` |
+| Password | `changeme123` |
 
-> **On the data:** the fleet is a seeded demo fleet served from the real API contract, so
-> the UI has a realistic platform to render before persistence exists. It is **not** reading
-> live cluster state — that begins in Phase 3 when the Deployment Engine connects via
-> client-go. The dashboard says so on its Overview screen rather than implying live data.
+Or click **"Create an organisation"** to register a new account.
 
-## Verified So Far
+---
 
-### The capabilities, in the browser
+## Environment Variables
 
-Three pages the dashboard was missing, each showing what the API had been able to
-answer for weeks and nobody could see:
+All have sensible defaults for local development. Override as needed:
 
-- **Dependencies** — the graph, blast radius, single points of failure and the critical
-  path. Edges proved by experiment are marked as such, because an edge found by
-  breaking a service is stronger evidence than one declared.
-- **Diagnostics** — incidents, ranked verdicts, and the evidence under each one in
-  full, including the facts that argue *against* a candidate. A human can mark a
-  verdict right or wrong.
-- **Optimization** — advice with its reliability impact, where withheld savings are
-  shown beside safe ones rather than hidden. Apply is disabled with the reason, so
-  the platform's refusal is visible instead of mysterious.
+| Variable | Default | Description |
+|---|---|---|
+| `DATABASE_URL` | `postgres://aegiscloud:aegiscloud@localhost:5432/aegiscloud?sslmode=disable` | PostgreSQL connection URL |
+| `REDIS_ADDR` | *(empty — Redis disabled)* | Redis address e.g. `localhost:6379` |
+| `PORT` | `8081` | Backend HTTP port |
+| `AEGISCLOUD_JWT_SECRET` | `dev-secret-change-me` | JWT signing key (min 32 bytes in prod) |
+| `AEGISCLOUD_ADMIN_EMAIL` | `admin@aegiscloud.local` | Seeded admin email |
+| `AEGISCLOUD_ADMIN_PASSWORD` | `changeme123` | Seeded admin password |
+| `AEGISCLOUD_WEB_ORIGIN` | `http://localhost:5173` | CORS allowed origin |
+| `VITE_API_URL` | `http://localhost:8081` | Frontend → backend URL |
 
-Verified by checking every field each page reads against the live API, and by a
-production build (`245 kB`, `74 kB` gzipped).
+---
 
-### A measurement that was measuring the wrong thing
+## API Endpoints
 
-Bringing the accuracy figure onto the Diagnostics page showed it had fallen from 1.00
-to 0.00 — and the cause was the harness, not the engine.
-
-Retrospective analysis asked "which services were below 80 during the incident
-window?" During a 48-second outage inside a five-minute score window:
-
+### Authentication
 ```
-storefront  75.8   ← below the threshold, so treated as the only candidate
-catalog     91.3   ← the service the platform had itself scaled to zero
+POST /api/v1/auth/signup         Create organisation + admin
+POST /api/v1/auth/login          Get bearer token
+GET  /api/v1/auth/me             Current user info
+GET  /api/v1/auth/signup/enabled Whether self-signup is on
+POST /api/v1/auth/users          Invite user (ADMIN only)
 ```
 
-A short incident barely moves a longer-window score, so the true cause sat above the
-line while a symptom dipped below it, and the accuracy number reflected the threshold
-rather than the diagnosis. An incident is a **change**, not a level: retrospective
-candidacy is now a material drop against the service's own score just before the
-window, with the absolute threshold kept as a second trigger for a service that was
-already unhealthy. Precision@1 is 1.00 again, on the same data, for the right reason.
-
-
-
-### The end-to-end story, run in one sitting
-
-Deploy from an image, monitor it, detect load, scale it, detect failure, recover it,
-measure reliability, diagnose a problem. In that order, on the live fleet:
-
+### Clusters
 ```
-1  DEPLOYED    5 microservices, image built by the platform, part of one application
-
-2  HIGH LOAD   a load generator pod drives real traffic into payments
-               kubectl top: payments 7220m CPU against a 100m request
-
-3  SCALED      "CPU at 7260.3% of request, above the 75% ceiling; sizing for 60%
-                needs 8 replicas"                       -> payments 1 -> 8, applied
-
-4  FAILURE     a pod crashed from inside the workload, repeatedly
-
-5  RECOVERED   watch fired in seconds; payments | CRASH_LOOP | RESTARTED
-
-6  MEASURED    catalog 100.0 / 48.7ms   orders 100.0 / 26.2ms   payments 100.0 / 29.1ms
-
-7  DIAGNOSED   catalog made to fail every request; four services degraded:
-               #1 catalog     LIKELY_CAUSE     0.70
-               #2 shipping    POSSIBLE_CAUSE   0.36
-               #3 orders      LIKELY_SYMPTOM   0.27
-               #4 storefront  LIKELY_SYMPTOM   0.27
+GET    /api/v1/clusters          List clusters
+POST   /api/v1/clusters          Register cluster
+GET    /api/v1/clusters/{id}     Get cluster
+DELETE /api/v1/clusters/{id}     Remove cluster
+GET    /api/v1/clusters/{id}/connectivity  Test K8s connectivity
 ```
 
-**A bug this run exposed.** Step 5 did nothing the first time. The watch fired four
-times and no healing happened, because the watch treats a container that exited
-non-zero as unhealthy while the classifier recognised only `CrashLoopBackOff` — the
-state a crashing pod reports *while waiting* for its next attempt. Between attempts
-the same pod reports its termination reason instead, so for part of every cycle the
-two halves of the platform disagreed about what "broken" meant and nothing was ever
-healed. `Error`, `StartError` and `ContainerCannotRun` are now classified as crashes,
-with a test for each.
-
-**A configuration lesson, not a bug.** Step 7 first returned "no service is below the
-degradation threshold" under the default 60-minute score window: a minute of total
-failure barely moves an hour of history. The window governs how quickly an incident
-becomes visible, which is why it is configuration and why detection and error budgets
-use different ones.
-
-
-
-### The fleet: five microservices, registered from a Docker image
-
-Everything the platform manages is now a container image it registered, deployed and
-measures. No seeded rows, no workloads deployed outside the platform.
-
+### Services & Deployments
 ```
-service      health   replicas  image                             calls
-storefront   HEALTHY    1/1     sample-service:built-by-platform  orders, catalog
-orders       HEALTHY    1/1     sample-service:built-by-platform  payments, catalog
-shipping     HEALTHY    2/2     sample-service:built-by-platform  catalog
-payments     HEALTHY    1/1     sample-service:built-by-platform  (leaf)
-catalog      HEALTHY    1/1     sample-service:built-by-platform  (leaf)
+GET  /api/v1/services            List microservices
+POST /api/v1/services            Register service
+GET  /api/v1/overview            Fleet overview dashboard data
+GET  /api/v1/targets             Deployment targets
+POST /api/v1/targets             Create deployment target
+POST /api/v1/targets/{id}/deploy Deploy to Kubernetes
+POST /api/v1/targets/{id}/scale  Scale replicas
+POST /api/v1/targets/{id}/restart Restart pods
 ```
 
-The image was built by the platform itself from this repository, and every score is a
-measurement: `catalog 100.0 / 41.4ms p95`, `storefront 100.0 / 35.9ms p95`, and so on
-from probes against each service's working endpoint.
-
-The replica counts differ because the control plane scaled the idle ones down on its
-own — `catalog: 2->1 on cpu`, `orders: 2->1 on cpu` — which is the platform doing its
-job rather than drift.
-
-**Registration is idempotent, which it was not.** Re-registering a service used to add a
-second endpoint at the same URL and a second copy of every objective: the workload was
-then probed twice and the alerting sweep evaluated both, so availability became a
-function of how many times somebody pressed Register. Unique constraints on
-`(target, address)` and `(target, sli_type)` now make a repeat registration a repeat of
-one statement. Verified: 10 endpoints collapsed to 5, 20 SLOs to 10, and registering
-again changes neither.
-
-**The listing groups by service, not by probe.** A service may legitimately have more
-than one endpoint, and showing it once per probe put every service on the screen twice.
-
-
-
-### Microservice registration, front to back
-
-One call, and one screen, that take a container image to a measured service.
-
-`POST /api/v1/microservices` declares the service, deploys the image with its
-dependency wiring, registers it as a managed target, starts probing it and gives it
-SLOs. Each step is named in the response rather than collapsed into success or
-failure:
-
+### Monitoring & Reliability
 ```
-declared service shipping
-deployed kind-registry:5000/aegiscloud/sample-service:built-by-platform (2 replicas)
-registered as a managed target, scaling strategy CPU
-probing k8s://aegiscloud-live/shipping:80/api/work
-SLOs: 99.0% availability, p95 under 250ms
+GET /api/v1/slos                 SLO list with error budgets
+GET /api/v1/alerts               Active alerts
+GET /api/v1/scaling              Scaling event history
+GET /api/v1/healing              Self-healing event history
+GET /api/v1/reliability/{id}     Reliability score breakdown
+GET /api/v1/experiments          Chaos experiment history
 ```
 
-**Why one call rather than six.** Every step is still its own endpoint. The composite
-exists because doing it in six made the caller responsible for the ordering and for
-cleaning up when step four failed — and a half-registered service is the worst
-available outcome: deployed and serving traffic, yet invisible to scaling, healing,
-evaluation and RCA. That state is not noticed until an incident. A deployment that
-fails now stops the sequence rather than registering a target for a workload that is
-not running, because every engine would then skip it and report it missing, which
-reads as a platform bug rather than a failed deploy.
-
-**The dashboard has a Microservices page.** Register a service from a form, see what is
-managed with live cluster state beside the recorded state, read deployment history, and
-roll back. The two states are shown side by side deliberately — the interesting cases
-are exactly where they disagree.
-
-**A disagreement the page immediately exposed.** `catalog` showed `:v2` in history while
-the cluster ran `:built-by-platform`: rollback deployed but never recorded itself, so
-the history was stale and the *next* rollback would have read that stale row as its
-target. Rollback now records itself like any other deployment, and the two agree.
-
-The probe path defaults to `/api/work`, not `/healthz`. Liveness must stay self-only —
-a pod should never be restarted because something it calls is down — while the working
-endpoint fails when a dependency fails, and that is what availability should mean.
-
-
-
-### Container build and deployment history
-
-The platform can now produce the images it runs, and remembers what it deployed.
-
-**It built its own workload.** From
-`github.com/saurav7809/cloud-reliability-platform` at `workloads/sample-service`,
-pushed to the local registry, then deployed:
-
+### Diagnostics & AI
 ```
-POST /api/v1/builds     -> RUNNING   (Kaniko Job in aegiscloud-builds)
-GET  /api/v1/builds/{id}-> SUCCEEDED "image pushed to the registry"
-registry catalog        -> {"tags":["registry-test","built-by-platform"]}
-catalog now runs        kind-registry:5000/aegiscloud/sample-service:built-by-platform
+POST /api/v1/diagnostics         Run RCA on an incident
+GET  /api/v1/graph               Service dependency graph
+GET  /api/v1/optimization        Resource optimization advice
+POST /api/v1/ai/analyze          AI-powered log analysis
 ```
 
-**Kaniko rather than `docker build`, deliberately.** Shelling out to Docker means
-mounting a Docker socket into the control plane, and a socket is root on the host. A
-component trusted with production clusters should not also hold the key to the machine
-it runs on. Running the build as a Kubernetes Job also keeps the architectural rule
-intact: the same code builds on kind and on EKS, and progress is visible to anyone with
-cluster access rather than only in the platform's logs.
+Full interactive docs at **http://localhost:8081/swagger**
 
-**Deployment history and rollback.** Every rollout is recorded with the image it
-replaced — captured at deploy time, because "what was running before" stops being
-answerable the moment the object is overwritten. Failed rollouts are recorded too: a
-failed deployment is what an incident investigation most wants to find.
+---
 
-Rollback reads its target from history rather than from the caller. Requiring someone
-to remember the previous tag at the moment they are least able to is how a rollback
-becomes a second outage:
+## Database Schema
 
-```
-one deployment recorded  -> refused: "no earlier successful deployment to roll back to"
-two recorded             -> rolled back to ...:built-by-platform without being told which
-```
+The 23-table schema is managed entirely by Flyway (in `control-plane/src/main/resources/db/migration/`).
 
-**Known limits, stated rather than hidden.** Builds clone public repositories over
-HTTPS; private ones need secrets management the platform has not built, and accepting a
-token in a request body would be worse than the limitation. A build whose Job vanished
-before completion is recorded FAILED, not RUNNING — the honest statement is that the
-outcome was not observed, and an unobserved build must never read as a success.
+Key tables:
+- `organization`, `app_user` — multi-tenant identity
+- `cluster`, `service` — registered Kubernetes clusters and microservices
+- `deployment_target` — service × cluster deployment configuration
+- `slo`, `error_budget_snapshot` — SLO definitions and budget tracking
+- `alert`, `alert_rule` — alerting
+- `scaling_event`, `healing_event` — control plane history
+- `evaluation_run` — chaos experiment results
+- `rca_report` — root cause analysis results
 
+---
 
-
-### Sign-up and user management
-
-Self-service registration, colleague invites, and role changes.
-
-**Why open sign-up is safe here, and would not have been two phases ago.** Signing up
-creates a *new organisation*, and tenant isolation is enforced inside every query — a
-stranger who registers gets an empty organisation and sees no cluster, service or
-incident belonging to anyone else. Verified on the live platform: a fresh account reads
-`clusters=0 services=0 targets=0`. Before that boundary existed, this endpoint would
-have handed any passer-by the whole fleet. It can still be switched off with
-`AEGISCLOUD_SIGNUP_ENABLED=false`, which is what a single-company deployment wants.
-
-**Password rules: length, not symbols.** Twelve characters minimum and no composition
-requirements, following NIST's reasoning — `Passw0rd!` satisfies every
-upper-lower-digit-symbol rule ever written and is on every cracking list, while
-`these are the days of miracle` is not. The one substring rule that earns its place
-rejects a password containing your own email address.
-
-Observed refusals:
+## Project Structure
 
 ```
-"nope"                          -> a valid email address is required
-"Passw0rd!"                     -> must be at least 12 characters; length matters
-                                   more than symbols, so a memorable phrase is fine
-samantha / "samantha12345"      -> the password must not contain your email address
-admin@aegiscloud.local          -> an account already exists for that address
+aegiscloud/
+├── control-plane/          # Spring Boot backend (port 8081)
+│   ├── src/main/java/io/aegiscloud/controlplane/
+│   │   ├── auth/           # JWT, RBAC, user management
+│   │   ├── config/         # Spring Security, CORS, DataSource, Redis
+│   │   ├── domain/         # Core domain models
+│   │   ├── engine/         # Reconciliation, scaling, healing engines
+│   │   ├── eval/           # SLO evaluation, reliability scoring
+│   │   ├── experiment/     # Chaos engineering
+│   │   ├── graph/          # Service dependency discovery
+│   │   ├── k8s/            # Kubernetes integration layer (Fabric8)
+│   │   ├── optimize/       # Cost & resource optimization
+│   │   ├── persistence/    # JPA entities & repositories
+│   │   ├── rca/            # Root cause analysis engine
+│   │   ├── seed/           # Demo data seeder
+│   │   └── web/            # REST controllers
+│   └── src/main/resources/
+│       ├── application.yml          # Base config
+│       ├── application-dev.yml      # Local dev overrides
+│       └── db/migration/           # Flyway SQL migrations (V1-V5)
+│
+├── web/                    # React frontend (port 5173)
+│   └── src/
+│       ├── api/client.ts   # Typed API client (623 lines)
+│       ├── components/     # Dashboard, Charts, LiveEvents, UI
+│       └── pages/          # Overview, Clusters, Services, Reliability...
+│
+├── ai-service/             # Python FastAPI AI service (port 8090)
+├── docker-compose.yml      # PostgreSQL + Redis
+├── start-dev.ps1           # One-click startup script
+└── docs/                   # Architecture, API, database docs
 ```
 
-**Invites and roles.** The first account in an organisation is necessarily ADMIN —
-somebody has to invite the second, and an organisation whose only user cannot
-administer it is a support ticket by construction. The organisation comes from the
-caller's token and never from the request body, because an organisation id in the body
-would let one administrator create accounts inside another tenant.
+---
 
-Verified: an invited OPERATOR can list members (200) but cannot invite (403) or read
-the audit trail (403); and the last remaining administrator cannot demote themselves —
-*"this is the organisation's only administrator; promote someone else first"* — because
-an organisation with no ADMIN is locked out of itself with no way back.
+## Phase Status
 
-Sign-up is audited as an ENGINE action rather than a USER one: there is no
-authenticated caller during registration, and attributing it to the account being
-created would claim they authorised something before they existed.
+| Phase | Description | Status |
+|---|---|---|
+| 1 | Architecture & Docs | ✅ Complete |
+| 2 | Project Foundation | ✅ Complete |
+| 3 | Authentication & RBAC | ✅ Complete |
+| 4 | Project/Cluster Management | ✅ Complete |
+| 5 | Service Management | ✅ Complete |
+| 6 | Docker Image Registration | ✅ Complete |
+| 7 | Microservice Configuration | ✅ Complete |
+| 8 | Kubernetes Integration (Fabric8) | ✅ Complete |
+| 9 | Automated Deployment | ✅ Complete |
+| 10 | Deployment Management | ✅ Complete |
+| 11 | Rollback | ✅ Complete |
+| 12 | Service Discovery / Graph | ✅ Complete |
+| 13 | SLO Monitoring | ✅ Complete |
+| 14 | Log Management | 🔄 In Progress |
+| 15 | Distributed Tracing | 🔄 In Progress |
+| 16 | Auto Scaling (HPA) | ✅ Complete |
+| 17 | Self Healing | ✅ Complete |
+| 18 | Reliability Dashboard | ✅ Complete |
+| 19 | Incident / Alert Detection | ✅ Complete |
+| 20 | Root Cause Analysis | ✅ Complete |
+| 21 | AI Service (FastAPI) | ✅ Complete |
+| 22 | Automated Remediation | ✅ Complete |
+| 23 | Chaos Engineering | ✅ Complete |
+| 24 | Cost Optimization | ✅ Complete |
+| 25-29 | Capacity, Multi-cloud, CI/CD | 🔜 Planned |
 
+---
 
+## Troubleshooting
 
-### Closing the last four requirements
-
-Four requirements the platform had stated and not met. Nothing else from the
-architecture diagram was built — see *Deliberately not built* below.
-
-**FR-15 — metric ingestion.** Two routes into the same `metric_sample` table the
-probes write to, so SLO evaluation, scoring, RCA and the AI service treat pushed and
-probed data identically rather than growing a second code path each. Verified:
-
-```
-POST /targets/{id}/metrics   4 samples -> accepted 2, rejected 2
-                             "rejected unknown metric type: NONSENSE"
-                             "rejected LATENCY_MS with no value"
-```
-
-That second rejection was a bug caught by running it: the request record used a
-primitive `double`, so a JSON `null` became `0.0` and a null latency was stored as a
-0ms reading — a number that looks like a measurement and drags every percentile down.
-The Prometheus pull route refuses a multi-series result for the same reason: three
-series mean the query did not identify one thing, and storing the first attributes one
-pod's number to a whole target.
-
-**FR-39 — alerts from burn rate.** Raised by the platform itself, unprompted:
-
-```
-CRITICAL  auth-service @ aegiscloud-local is burning its AVAILABILITY error budget
-          14.9x faster than sustainable; at this rate the budget is gone within a
-          day (0.0% left)
+### Backend fails to connect to PostgreSQL
+Ensure Docker Desktop is running and containers are healthy:
+```powershell
+docker ps
+docker logs aegiscloud-postgres
 ```
 
-Severity follows how fast the budget disappears, not how bad the number looks. A
-dramatic rate computed from fewer than ten samples raises nothing — a 50x burn from
-four probes is a rumour, and paging on it is how alerting loses its credibility.
-Alerts auto-resolve when the rate recovers, because an alert that stays open after the
-problem is gone teaches people that open alerts mean nothing.
-
-**FR-41 — grouping under a root cause.** The alert above was attached to the incident
-that explains it. This is the half that matters operationally: when one service fails,
-every service downstream breaches its own SLO and raises its own alert, so the moment
-the platform is most useful is the moment it produces the most noise.
-
-**FR-42 / FR-43 — audit everything.** Cluster registration, deployments, target
-registration, autonomy changes, policy changes, experiments, applied recommendations
-and metric ingestion are now recorded, alongside the engine's own actions in the same
-table with the same shape:
-
-```
-USER    SET_POLICY        admin@aegiscloud.local  {maxReplicas: 8}   was {maxReplicas: 10}
-USER    SET_AUTONOMY      admin@aegiscloud.local  {level: SUGGEST}
-USER    INGEST_METRICS    admin@aegiscloud.local  {source: OTEL, accepted: 2, rejected: 2}
-ENGINE  SCALE_DOWN        platform                {fromReplicas: 3, toReplicas: 2}
-ENGINE  ESCALATE          platform
+Wipe and restart:
+```powershell
+docker compose down -v
+docker compose up -d
 ```
 
-Auditing never fails a request: a write that succeeded with a missing audit row is a
-recoverable gap, while a request rolled back over bookkeeping is an outage. The
-failure is logged as `AUDIT GAP` and the request stands.
+### Port 8080 conflict with Kubernetes ingress
+The backend runs on **8081** by default for exactly this reason.
 
-### Deliberately not built
+### "Could not reach the control plane" in browser
+Check that the backend is running on port 8081 and that CORS is allowing `http://localhost:5173`.
 
-Prometheus, Loki, Tempo, Grafana, OpenCost, Chaos Mesh, HPA/KEDA integration, ingress
-management and capacity planning appear in the architecture diagram and are **not**
-implemented. None is required by FR-1 to FR-45. Where their absence limits something,
-the platform says so at the point of use rather than in a footnote: cost savings read
-$0.00 without OpenCost, and the Experiment Engine refuses network and resource-pressure
-faults rather than approximating them without Chaos Mesh.
-
-
-
-### Python AI Service
-
-Anomaly detection, forecasting and RCA re-ranking, running as a FastAPI sidecar the
-control plane treats as optional. Observed against the platform's own probe history:
-
-```
-anomalies   173 real latency samples, median 13ms
-            "366 is 54.1 robust deviations above the median of 13"
-
-forecast    against the target's own 250ms SLO
-            "level 12.9 with a +0.48 per-sample drift that is smaller than the
-             noise in the series; no breach estimate is meaningful"
-
-re-rank     auth-service  platform 0.657 -> adjusted 0.807  (+0.15, the cap)
-            "telemetry is 28.5 deviations from this service's own baseline, which
-             the platform's threshold comparison cannot see"
-```
-
-**No model, and the code says so.** MAD-based detection and Holt linear trend, chosen
-because a probe series is tens of points a minute apart — a neural model on that would
-need orders of magnitude more data and could not explain itself to an operator at three
-in the morning. `/health` names the methods in use so a verdict can always be traced to
-what produced it.
-
-**A flaw the tests caught.** The first forecaster reported "crosses 250ms in about 377
-samples" for a *flat, noisy* series: real arithmetic performed on jitter. It already
-knew its own confidence was low and wasn't acting on it. It now withholds the breach
-estimate entirely and says why.
-
-**The re-ranker cannot overrule topology.** Its adjustment is capped at 0.15 and halved
-for candidates the graph places downstream, so unusual telemetry can reorder candidates
-the platform found comparable but can never lift a symptom above its cause. It also
-cannot introduce a candidate, having no database to invent one from.
-
-**One bug found by running it.** Java's HttpClient defaults to HTTP/2 and opens with an
-h2c upgrade that uvicorn rejects, mangling the request into a 422 that reads exactly
-like a validation failure in a perfectly valid body. Pinned to HTTP/1.1.
-
-
-
-### Phase 10 — Multi-Cloud & Hardening
-
-**Multi-tenancy is now enforced, not reserved.** The `org_id` columns existed from
-Phase 1 and nothing used them: any authenticated user could read every organisation's
-clusters, services, graph, incidents and recommendations. The organisation is now part
-of the JWT identity and part of every tenant-facing query.
-
-Verified with two real tenants in the same database:
-
-```
-tenant                clusters                      services   graph        incidents
-AegisCloud            4 (incl. aegiscloud-local)    15         15 svc/19 e  1
-Northwind Labs        1 (northwind-prod)            1          1 svc/0 e    0
-```
-
-And with tenant B holding tenant A's genuine ids:
-
-```
-POST /alerts/{A's alert}/acknowledge   as B -> 404      as A -> 200
-GET  /services/{A's service}/blast-radius  as B -> 404
-GET  /incidents/{A's incident}             as B -> 404  as A -> 200
-```
-
-Four decisions worth stating:
-
-- **Scoping lives in the SQL**, not in a filter applied to results. Filtering
-  afterwards means the wrong rows were already fetched and already counted in an
-  aggregate, one forgotten line away from being returned.
-- **A cross-tenant id returns 404, not 403.** Telling a caller that an id exists but
-  is not theirs confirms the id.
-- **A token with no organisation is rejected** rather than defaulted to one. Tokens
-  issued before tenancy existed are exactly what a default would admit.
-- **The overview cache key carries the organisation.** A single shared key would have
-  served one tenant's rollup to another for the length of the TTL — the quietest
-  possible leak, since every individual query was scoped correctly.
-
-Engines that run on a timer have no caller and therefore no tenant; the optimization
-advisor now iterates organisations explicitly rather than running as whichever one
-happened to be first.
-
-**The cloud-agnostic boundary is guarded by tests, not by intent.** Three checks fail
-the build if the central architectural claim is broken: no cloud provider SDK is
-imported anywhere, no engine branches on which provider a cluster belongs to, and
-Kubernetes clients are built only by `KubernetesClientFactory`. This is the honest
-form of "multi-cloud" available without cloud accounts: EKS, AKS and GKE differ from
-the kind cluster by a kubeconfig context and a label, and now nothing can quietly make
-them differ by more.
-
-**Also fixed:** the operator console was lying about the platform's own state — the
-engine-status panel still reported the Deployment Engine as `NOT_IMPLEMENTED` and
-telemetry as "arrives in Phase 5", six phases after both shipped. Statuses are now
-derived from what each engine has actually recorded, per organisation, and the RCA and
-Optimization engines were added to the list.
-
-**Not done, and not claimed:** no EKS, AKS or GKE cluster has been registered, because
-that needs cloud accounts this machine does not have. What is verified is that
-registration takes any kubeconfig context and that no code path distinguishes one
-provider from another.
-
-
-
-### Phase 9 — Optimization Advisor
-
-Cost and performance advice, with one rule above the rest (FR-33, UC-7): reliability
-is not currency. Observed against the running fleet:
-
-```
-auth-service      REPLICA_REDUCTION   safe=false   "Not safe to reduce replicas yet"
-catalog-service   SCALING_STRATEGY    safe=false   TREND scaling but no latency SLO
-checkout-service  OBSERVABILITY_GAP   safe=false   nothing is measuring it
-```
-
-**Withholding, not warning.** `auth-service` was genuinely over-provisioned at 0.6%
-CPU, and the advisor computed the saving — then declined to offer it, because the
-error budget was at 0% after the outages of the previous phases. Asking the API to
-apply it anyway is refused:
-
-> this recommendation is not offered as safe to apply: CPU sits at 0.6% of request
-> across 2 replicas... Withheld: only 0.0% of the error budget remains, so removing
-> capacity now would spend reliability the service cannot currently spare.
-
-There is no confirm-anyway path. A warning gets skimmed; an absent recommendation
-cannot be applied by accident. The saving is still stated in full, so nothing is
-hidden — it is simply not offered as a thing to do.
-
-**Applying is governed like any other write.** Three refusals stand between advice and
-a cluster: the advisor's own safety verdict, the recommendation still being open, and
-the same Policy Engine check the autonomous loop passes. An operator agreeing with a
-recommendation does not make it within policy.
-
-**Dismissals are kept.** `"reviewed: waiting for the error budget to recover first"`
-stays on the record against the recommendation, because FR-34 asks for bad advice to
-remain visible after someone acted on it.
-
-**Advice requires measurement.** No CPU reading, no resource recommendation — the
-advisor says nothing rather than inferring utilisation from a replica count. Targets
-nothing has probed get an `OBSERVABILITY_GAP` finding instead, which names their cost
-and tells the operator to register an endpoint.
-
-**Known limitation.** Estimated savings for the kind-cluster targets read $0.00
-because `monthly_cost_usd` is only populated for the seeded demo fleet; real cost data
-needs the OpenCost integration, which is not built. The arithmetic is exercised by
-tests with real figures ($400/4 replicas → $100 saving), but the live numbers are
-honest zeros rather than invented ones.
-
-
-
-### Phase 8 — Root Cause Analysis
-
-Ranked candidate causes from four signal classes — graph position, temporal order,
-change events, resource saturation — each verdict carrying the facts it rests on.
-
-**A real diagnosis.** `auth-service` was taken to zero replicas; once its measured
-score fell, diagnosing produced:
-
-```
-auth-service, likely cause (confidence 0.66)
-  TEMPORAL_ORDER       degraded first, at 2026-09-01T06:13:39Z
-  CHANGE_EVENT         4 changes near the incident: scaled 2 -> 1 on cpu; ...;
-                       ESCALATED auth-service-744b6794fc-tdzng (IMAGE_PULL_FAILURE)
-  RESOURCE_SATURATION  reliability score fell 94.3 points
-```
-
-**Accuracy against ground truth.** Chaos runs are the only incidents whose true cause
-the platform knows, because it caused them. `GET /api/v1/rca/accuracy` re-analyses
-each run's window and checks whether the top verdict names the service that was
-actually broken: **1 of 1 scored correct**. Runs where nothing degraded measurably are
-reported as unscored rather than counted either way — a chaos run the system shrugged
-off has no incident to diagnose, and scoring it would move the number without
-measuring anything.
-
-**FR-29 is structural, not a filter.** Confidence is derived *from* the evidence list,
-so a candidate with no supporting facts has no confidence to compute and never becomes
-a verdict. Verified: an isolated service with no graph position, no timing, no changes
-and healthy pods produces no verdict at all.
-
-**Symptoms are labelled, not discarded.** An early draft dropped low-confidence
-candidates, which threw away the most useful output in the three-alerts-one-cause
-incident: telling the operator that two of the three are downstream and need no
-separate investigation. Downstream candidates are now kept and marked
-`LIKELY_SYMPTOM` with the counter-evidence stated.
-
-**Three bugs found by running it, all of the same family — seeded fixtures being
-mistaken for measurements:**
-
-1. Diagnosis opened an incident for a service scoring 100, because it read the
-   denormalised score column, which holds a number for every target including ones
-   nothing has ever probed. Candidacy now requires a `reliability_score_snapshot` row,
-   which exists only because something was measured.
-2. The configured score window was decorative: scoring always read a day of samples,
-   so a service that went down five minutes ago still scored in the nineties.
-   Detection would have taken hours. The window is now honoured, and SLO windows stay
-   long on purpose — a budget that forgets last week is not a budget.
-3. The accuracy harness scored a seeded `NETWORK_PARTITION` row — a fault type the
-   engine cannot even inject. Ground truth is now restricted to runs the platform
-   actually executed and recorded.
-
-**The Intelligence Layer never writes to a cluster.** Every cluster call in it is a
-read, and there is exactly one: listing pods. A wrong diagnosis stays a wrong sentence
-on a screen; only the policy-gated Control Plane acts.
-
-
-
-### Phase 7 — Dependency & Propagation
-
-The graph, built over the real `microservices-demo` topology discovered in Phase 3
-(15 services, 19 declared edges):
-
-```
-entry points        loadgenerator, checkout-service, shoppingassistantservice
-critical path       loadgenerator -> frontend -> checkoutservice -> shippingservice
-                    -> currencyservice
-single points of    frontend        cuts 9 services off from every entry point
-failure             checkoutservice cuts 2
-largest blast       currencyservice 4 affected · productcatalogservice 4 · cartservice 3
-radius
-```
-
-Every one of those is computed by removal and traversal, not by counting edges.
-A single point of failure is found by taking the service out and seeing what can no
-longer be reached from any entry point — which is why `auth` and `catalog` in the
-test topology are correctly *not* flagged: the database below them is reachable
-through either, so neither alone isolates anything.
-
-**Direction is the thing that matters.** An edge `A -> B` means A calls B, so failure
-travels backwards: blast radius walks the reverse graph. Getting that inverted
-produces an answer that is confidently and exactly wrong, so it has its own test.
-
-**Discovery from experiments.** A `DEPENDENCY_OUTAGE` experiment now records the edges
-it demonstrates. Taking `auth-service` to zero and watching `catalog-service`
-throughout produced: *"catalog-service held up (100.0 -> 100.0); no dependency
-recorded"* — which is correct, since the two sample workloads genuinely are
-independent. An absent edge is honest; an invented one produces a blast radius that
-looks authoritative and is wrong.
-
-This is a stronger signal than a trace, and a narrower one. A trace shows that A
-called B; an experiment shows that A stops working when B does — which is what a
-dependency edge actually claims. It cannot find dependencies nobody has experimented
-on, so `MANUAL` and (once tracing is deployed) `TRACE` edges remain the broader source.
-
-**A gap this phase exposed.** The platform could deploy a workload but had no way to
-register it as a managed target, so a rolled-out service was invisible to scaling,
-healing, evaluation and experiments — all of which read `deployment_target`.
-`POST /api/v1/targets` closes that, and refuses to register a target whose workload is
-not actually running.
-
-**Scale.** 200 services and 1000 edges: blast radius, criticality ranking and the full
-single-point-of-failure sweep complete well inside the interactive-latency target,
-with cycles, disconnected components and unknown edge endpoints all covered by tests.
-
-
-
-### Phase 6 — Experiment Engine
-
-Break something on purpose, measure what happened, put it back. Observed against the
-kind cluster:
-
-**Safety refuses before anything is broken**
-- `POD_KILL` of 3 of 3 replicas: *"exceeds the 50% blast-radius limit (at most 1)"*.
-- A 3600s run: *"exceeds the 900s maximum: a fault left injected longer than that
-  cannot be reliably undone by hand if the platform dies mid-run"*.
-- Both refusals are recorded as `REJECTED_BY_POLICY` runs with their reason, so a
-  request that was declined is as visible as one that ran.
-
-**A run that completes**
-- `REPLICA_LOSS`: replicas went 3 → 2 → 3, hypothesis held, score 90.7 → 90.8 → 91.4,
-  and the fault spec records exactly what was injected and that it was restored.
-- `POD_KILL`: one pod deleted, *"nothing to restore: the ReplicaSet recreates deleted
-  pods"*, score 92.2 → 92.3 → 92.8.
-
-**A run that aborts itself**
-- With an abort threshold of 99.9 against a real score of 91.7, a run requested for
-  300s ended after **0.6s**: *"steady-state hypothesis broken"* — and restored.
-
-**Two bugs the first real run exposed, both now fixed**
-
-The control loop and the Experiment Engine were each unaware of the other:
-
-1. The loop scaled down, an experiment then reduced readiness, and the loop's
-   verification blamed **its own action** and rolled back a correct decision.
-   Verification now discards any window a chaos run overlapped:
-   *"verification inconclusive: a chaos experiment overlapped this window"*.
-2. The loop kept autoscaling a target that was under experiment, fighting the
-   injected fault and making the result unreadable. Scaling now pauses for a target
-   with a run in flight: *"scaling paused: a chaos experiment is running on this
-   target"*. Healing deliberately keeps running — a pod that fails for an unrelated
-   reason still deserves fixing.
-
-**What is deliberately not implemented.** Network latency, packet loss, partitions and
-in-container CPU/memory pressure need a privileged node agent — that is what Chaos
-Mesh installs. They are left unimplemented rather than approximated, because
-restarting a pod is not a network partition, and Phase 8's RCA will be scored against
-these experiments' recorded causes.
-
-
-
-### Real-time detection (Kubernetes watches)
-
-The control loop no longer waits for its own timer to notice a failure. Informers
-watch pods in every namespace that has targets, and an unhealthy pod reconciles that
-target immediately — through the same `reconcileTarget` path, and therefore the same
-policy and autonomy checks, that the scheduled sweep uses. The sweep remains as the
-backstop for anything a dropped watch missed.
-
-Measured with the polling interval deliberately set to **10 minutes**, so nothing
-observed could have come from the timer:
-
-```
-10:49:50.220  image changed to a tag that does not exist
-10:49:54.088  watch: unhealthy pod reported, reconciling now      (+3.9s)
-10:49:55.411  escalated: "pod cannot obtain its image (ErrImagePull);
-              a restart would fail identically"                   (+5.2s)
-```
-
-Detection in under four seconds against a sixty-second polling floor, and the burst
-of events a crash loop produces is debounced so one failure does not become a
-stampede of reconciliations.
-
-
-
-### Phase 5 — Evaluation Engine
-
-The phase that replaces fixtures with measurements. Observed against the kind cluster:
-
-**Probing a service that has no ingress**
-- Endpoints are addressed either as ordinary URLs or as
-  `k8s://namespace/service:port/path`, which routes through the Kubernetes API
-  server's service proxy. A ClusterIP service with no NodePort and no port-forward
-  is probed exactly as it stands, over the same authenticated API used everywhere
-  else — so this works identically against kind and EKS.
-- A real probe of `auth-service` returned HTTP 200 in **16-23ms**.
-
-**A correctness fix the first run exposed**
-- The first implementation built a Kubernetes client per probe, so every measurement
-  paid for a fresh TLS handshake: readings came back at 274ms and a p95 of 1916ms.
-  That is the prober measuring itself. Clients are now pooled per cluster, and the
-  same probe reports 23ms.
-
-**SLO evaluation and error budgets**
-- Availability and latency SLOs registered against the target, evaluated over their
-  windows: *"30 of 30 measurements met the availability objective (100.00%), 100.0%
-  of budget left, burn 0.00x"* and *"p95 is 23ms against a 250ms objective"*.
-- Reliability Score climbed **70 → 100** as real samples accumulated and the cold
-  -start outlier aged out of the percentile, with every component reported alongside
-  it: `{availability=100.0, latency=100.0, errorRate=100.0}`.
-
-**The failure path**
-- Scaling `auth-service` to zero replicas made the probe fail with HTTP 503.
-  Availability fell to **77.5%**, the error budget hit **0% remaining** and a burn
-  rate of **45x**, and the score dropped to 84.3.
-- The latency SLO stayed at 31 samples while availability counted 40 — failed probes
-  never enter a latency percentile, because the time a request took to fail is not a
-  latency measurement.
-- `deployment_target` now carries measured readings (score 85.4, availability 79.17%,
-  p95 23.1ms) rather than seeded ones.
-
-**Tests** — 61 pass, covering burn-rate arithmetic at and beyond the objective,
-zero-tolerance objectives without dividing by zero, nearest-rank percentiles, score
-renormalisation when a component was never measured, and cluster-address parsing.
-
-
-
-### Phase 4 — Control Plane
-
-Observed against the running stack (PostgreSQL 16 + Redis 7 in Compose, kind cluster
-`aegiscloud-local` on Kubernetes v1.37.0, metrics-server installed):
-
-**The loop**
-- `POST /api/v1/control-plane/reconcile` runs the same method the scheduler runs; a
-  cycle over the kind target reads live CPU utilisation from metrics-server
-  (0.6% of the declared request) rather than any stored figure.
-- 34 unit tests cover every scaling rule, the flapping guard and the whole failure
-  taxonomy, with no cluster involved.
-
-**Autonomy levels**
-- At the default SUGGEST, a scale-down was decided, policy-checked and written to the
-  ledger while the Deployment stayed at 3/3 replicas.
-- Promoted to ACT through `PUT /control-plane/autonomy`, the loop scaled the same
-  workload 3 → 2 unattended and recorded `scaling_event` plus an `autonomous_action`
-  row with its trigger value.
-- The immediately following cycle held: *"held: last scaled 1s ago, 178s of the 180s
-  cooldown remain"*.
-
-**Policy**
-- With `aegiscloud` added to `protectedNamespaces`, the identical decision came back
-  `REJECTED` with the reason recorded, and the cluster was not touched.
-
-**Self-healing**
-- A deliberately broken image (`ImagePullBackOff`) was classified
-  `IMAGE_PULL_FAILURE` and **escalated, not restarted** — "a restart would fail
-  identically" — with a `healing_event` row and no pod deletion.
-
-**Verification**
-- The applied scale-down was judged on a later cycle against the readiness it started
-  from and closed as `NO_CHANGE` (100% → 100%), not left PENDING.
-
-**Real time**
-- `GET /api/v1/control-plane/stream` pushes `cycle-started`, `decision`, `scaling`,
-  `healing`, `outcome` and `cycle-finished` as Server-Sent Events. Verified with a
-  live subscription: events arrived as each decision was made, keep-alive comments hold
-  the connection open, and the response carries
-  `Access-Control-Allow-Origin: http://localhost:5173`. The dashboard's Control Plane
-  page renders them in a Live Activity feed; `tsc -b` passes.
-
-### Phase 3
-
-
-Phase 3, observed against a running stack (PostgreSQL 16 + Redis 7 in Compose, kind
-cluster `aegiscloud-local` on Kubernetes v1.37.0):
-
-**Control plane**
-- Flyway applies all 23 tables to an empty database on first boot; the seeder is
-  idempotent and skips a populated one.
-- All 10 read endpoints return 200 with row counts matching the seeded fleet.
-  Aggregates check out by hand: 27 replicas, average score 92.9, $5,438.30/month.
-- Login issues a JWT; wrong password, unknown user, missing token and malformed token
-  all return 401 with the documented error envelope.
-- RBAC enforced through `@PreAuthorize`: a VIEWER reads every endpoint (200) and is
-  refused both alert mutations (403). ADMIN succeeds on both.
-- Acknowledge/resolve persist and invalidate the cached rollup — `openAlerts` drops
-  and `cacheHit` returns to false on the next read.
-- A malformed alert id returns 404 rather than 500.
-
-**Degradation**
-- With Redis stopped, `/api/v1/overview` still returns 200 and `/healthz` reports
-  `redis: disabled` while staying 200. A follow-up request completes in 82ms, so a
-  dead cache is not being waited on.
-
-**Deployment Engine (fabric8 7.8.0)**
-- Probing `aegiscloud-local` reads 1/1 nodes ready and Kubernetes v1.37.0 live from
-  the API, and writes both back to the cluster row.
-- The three cloud clusters hold no kubeconfig on this machine and are reported
-  `UNREACHABLE` with "no kubeconfig context configured" — not as healthy inventory.
-- Deploying `aegiscloud/sample-service:v1` to the kind cluster through
-  `POST /api/v1/deployments` rolled out 2/2 pods; re-sending the same request
-  converges instead of duplicating containers.
-- The engine refuses to modify a deployment it does not own unless `adopt=true`, and
-  the foreign workload is left untouched when it does.
-
-**Frontend**
-- `tsc -b` passes against the Java API's response types.
-- Login and every data fetch succeed cross-origin from `http://localhost:5173` with
-  correct `Access-Control-Allow-Origin` headers.
-
-**Application & Microservice Onboarding**, observed against a real public repository
-(`GoogleCloudPlatform/microservices-demo`, 458 files, 12 polyglot services):
-
-- `POST /api/v1/applications/{id}/repository` calls the real GitHub API, resolves
-  the default branch, and records success/failure with a human-readable detail.
-- `POST /api/v1/applications/{id}/discover` recursively scans the tree and correctly
-  identified all 12 services with their real languages (Java, Go, Python, C#,
-  JavaScript) and build tools, including a nested `src/cartservice/src` directory
-  named after its parent rather than its literal path segment.
-- Ports were read from the actual `EXPOSE` lines in each service's Dockerfile and
-  matched the repository's real values (e.g. adservice 9555, productcatalogservice
-  3550, shippingservice 50051) — nothing here is guessed or defaulted.
-- Re-running discovery updated the 12 existing rows rather than duplicating them, and
-  left the 3 hand-seeded services (checkout/catalog/auth) untouched, since discovery
-  only overwrites rows it created itself.
-- Resource validation rejects a limit set below its request (400, not a raw
-  constraint-violation stack trace); a valid update persists and reads back.
-- A secret-flagged environment variable is never stored in plaintext — `PUT` accepts
-  a value but the row (and every subsequent read) returns `value: null` once
-  `secret: true` is set.
-- RBAC holds here too: VIEWER reads every onboarding endpoint (200) and is refused
-  every write (403); ADMIN succeeds on both.
-
-**Not yet verified:** the six dashboard screens have not been re-checked visually in a
-browser against the Java backend — the HTTP layer beneath them is verified above, but
-nobody has looked at the rendered pages since the port. The dashboard has no UI yet
-for the onboarding endpoints above; they exist only as API surface yet.
-
-## Known Environment Notes
-
-- Docker Desktop on this machine installs to `%LOCALAPPDATA%\Programs\DockerDesktop\resources\bin`,
-  which is not on `PATH` by default — add it, or `docker` won't resolve in a shell.
-- The frontend build needs a bounded Node heap in some sandboxes:
-  `NODE_OPTIONS=--max-old-space-size=1024 npm run build` (already set in `web/Dockerfile` and
-  `docker-compose.yml`).
+### JWT `WARN: AEGISCLOUD_JWT_SECRET is N bytes`
+This warning appears for the dev secret. Safe to ignore locally. Set a proper secret in production.

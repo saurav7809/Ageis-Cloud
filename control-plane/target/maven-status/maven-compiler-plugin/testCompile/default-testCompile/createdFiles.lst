@@ -1,0 +1,15 @@
+io\aegiscloud\controlplane\engine\SelfHealingEngineTest.class
+io\aegiscloud\controlplane\engine\PolicyEngineTest.class
+io\aegiscloud\controlplane\engine\ScalingEngineTest.class
+io\aegiscloud\controlplane\auth\RegistrationTest.class
+io\aegiscloud\controlplane\graph\ServiceGraphTest.class
+io\aegiscloud\controlplane\engine\ClusterWatchServiceTest.class
+io\aegiscloud\controlplane\eval\ReliabilityScoreTest.class
+io\aegiscloud\controlplane\experiment\ExperimentSafetyTest.class
+io\aegiscloud\controlplane\eval\ProberAddressTest.class
+io\aegiscloud\controlplane\eval\SloEvaluatorTest.class
+io\aegiscloud\controlplane\CloudAgnosticBoundaryTest.class
+io\aegiscloud\controlplane\eval\MetricIngestionTest.class
+io\aegiscloud\controlplane\optimize\OptimizationAdvisorTest.class
+io\aegiscloud\controlplane\rca\RcaEngineTest.class
+io\aegiscloud\controlplane\alerting\BurnRateAlertingTest.class

@@ -10,6 +10,7 @@ import {
   type Verdict,
 } from "../api/client";
 import { Badge, Card, timeAgo } from "../components/ui";
+import { useLiveRefresh } from "../components/LiveEvents";
 
 const ASSESSMENT_TONE: Record<string, "good" | "warn" | "bad" | "info"> = {
   LIKELY_CAUSE: "bad",
@@ -46,6 +47,13 @@ export function DiagnosticsPage({ token }: { token: string }) {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
+  // AI Analysis state
+  const [aiAnalysis, setAiAnalysis] = useState<any | null>(null);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiError, setAiError] = useState<string | null>(null);
+
+  const API = import.meta.env.VITE_API_URL ?? "http://localhost:8080";
+
   const refresh = useCallback(async () => {
     try {
       const rows = await getIncidents(token);
@@ -63,6 +71,10 @@ export function DiagnosticsPage({ token }: { token: string }) {
   useEffect(() => {
     refresh();
   }, [refresh]);
+
+  // A new incident is exactly the thing this page exists to show, and it should not
+  // wait for someone to reload.
+  useLiveRefresh(["incident", "experiment"], refresh);
 
   useEffect(() => {
     if (!selected) return;
@@ -95,6 +107,25 @@ export function DiagnosticsPage({ token }: { token: string }) {
       setVerdicts(d.verdicts);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Could not record the judgement");
+    }
+  }
+
+  async function runAiAnalysis() {
+    if (!selected) return;
+    setAiLoading(true);
+    setAiError(null);
+    setAiAnalysis(null);
+    try {
+      const r = await fetch(`${API}/api/v1/ai/incidents/${selected.id}/rerank`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await r.json();
+      setAiAnalysis(data);
+      if (!data.analysed) setAiError(data.detail ?? "AI service unavailable");
+    } catch {
+      setAiError("Could not reach the AI analysis service");
+    } finally {
+      setAiLoading(false);
     }
   }
 
@@ -221,6 +252,98 @@ export function DiagnosticsPage({ token }: { token: string }) {
             );
           })}
         </Card>
+      )}
+
+      {/* AI Analysis Panel */}
+      {selected && (
+        <div style={{ marginTop: 14 }}>
+          <div style={{
+            background: "#0d1117", border: "1px solid #1a2332", borderRadius: 14, overflow: "hidden",
+          }}>
+            <div style={{
+              padding: "14px 20px", borderBottom: "1px solid #1a2332",
+              display: "flex", alignItems: "center", gap: 12,
+            }}>
+              <span style={{ fontSize: 22 }}>🤖</span>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontWeight: 700, fontSize: 14, color: "#e8eef6" }}>AI Analysis</div>
+                <div style={{ fontSize: 12, color: "#4d5d72" }}>Cross-references anomaly detection with RCA verdicts</div>
+              </div>
+              <button onClick={runAiAnalysis} disabled={aiLoading} style={{
+                padding: "8px 18px", borderRadius: 9, border: "none", cursor: "pointer",
+                background: aiLoading ? "#1a2332" : "linear-gradient(135deg, #6366f1, #3b82f6)",
+                color: aiLoading ? "#4d5d72" : "#fff", fontWeight: 700, fontSize: 13, transition: "all 0.2s",
+              }}>
+                {aiLoading ? "⟳ Analysing…" : "Run AI Analysis"}
+              </button>
+            </div>
+
+            <div style={{ padding: 20 }}>
+              {!aiAnalysis && !aiError && (
+                <div style={{ textAlign: "center", padding: 24, color: "#4d5d72", fontSize: 13 }}>
+                  Click "Run AI Analysis" to get a second opinion using anomaly detection.
+                </div>
+              )}
+
+              {aiError && (
+                <div style={{ padding: "12px 16px", background: "#1a1205", border: "1px solid #713f12", borderRadius: 9, color: "#fbbf24", fontSize: 13 }}>
+                  ⚠ {aiError} — The Python AI sidecar needs to be running for this feature.
+                </div>
+              )}
+
+              {aiAnalysis?.analysed && (
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }}>
+                  {/* Platform ranking */}
+                  <div>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: "#4d5d72", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 10 }}>Platform RCA</div>
+                    {(aiAnalysis.platformRanking ?? []).map((p: any, i: number) => (
+                      <div key={i} style={{
+                        display: "flex", alignItems: "center", gap: 10,
+                        padding: "10px 12px", marginBottom: 6, borderRadius: 9,
+                        background: "#060810", border: "1px solid #1a2332",
+                      }}>
+                        <span style={{ color: "#4d5d72", fontFamily: "monospace", fontSize: 12, width: 20 }}>#{p.rank}</span>
+                        <span style={{ flex: 1, fontWeight: 600, color: "#c8d4e3", fontSize: 13 }}>{p.service}</span>
+                        <span style={{
+                          fontFamily: "monospace", fontSize: 12, fontWeight: 700,
+                          color: p.confidence > 0.7 ? "#f43f5e" : p.confidence > 0.4 ? "#f59e0b" : "#22d3a0",
+                        }}>{(p.confidence * 100).toFixed(0)}%</span>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* AI ranking */}
+                  <div>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: "#6366f1", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 10 }}>AI Re-ranking</div>
+                    {(Array.isArray(aiAnalysis.aiRanking) ? aiAnalysis.aiRanking : []).map((p: any, i: number) => (
+                      <div key={i} style={{
+                        display: "flex", alignItems: "center", gap: 10,
+                        padding: "10px 12px", marginBottom: 6, borderRadius: 9,
+                        background: "#0d0f1f", border: "1px solid #2a2060",
+                      }}>
+                        <span style={{ color: "#4d5d72", fontFamily: "monospace", fontSize: 12, width: 20 }}>#{i + 1}</span>
+                        <span style={{ flex: 1, fontWeight: 600, color: "#a5b4fc", fontSize: 13 }}>
+                          {p.service_name ?? p.service ?? "—"}
+                        </span>
+                        {p.anomaly_score != null && (
+                          <span style={{ fontSize: 11, color: "#f43f5e", background: "#1a0008", padding: "2px 7px", borderRadius: 6, border: "1px solid #7f1d1d" }}>
+                            anomaly {p.anomaly_score.toFixed(2)}σ
+                          </span>
+                        )}
+                        <span style={{ fontFamily: "monospace", fontSize: 12, fontWeight: 700, color: "#818cf8" }}>
+                          {p.confidence != null ? `${(p.confidence * 100).toFixed(0)}%` : "—"}
+                        </span>
+                      </div>
+                    ))}
+                    {aiAnalysis.aiRanking?.length === 0 && (
+                      <div style={{ color: "#4d5d72", fontSize: 13 }}>No AI ranking available.</div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
       )}
     </>
   );

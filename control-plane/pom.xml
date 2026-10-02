@@ -26,6 +26,9 @@
              rejects outright, which broke connectivity probes against a current
              cluster. -->
         <fabric8.version>7.8.0</fabric8.version>
+        <!-- flyway-database-postgresql is not managed by the Spring Boot BOM;
+             pin it to the same version flyway-core resolves to. -->
+        <flyway.version>11.8.2</flyway.version>
     </properties>
 
     <dependencies>
@@ -72,6 +75,7 @@
         <dependency>
             <groupId>org.flywaydb</groupId>
             <artifactId>flyway-database-postgresql</artifactId>
+            <version>${flyway.version}</version>
         </dependency>
 
         <!-- Cache. Strictly optional at runtime: see CacheService. -->

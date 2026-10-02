@@ -1,0 +1,51 @@
+# ============================================================
+# AegisCloud Control Plane — Local Development Configuration
+# Active profile: dev
+# Start with: mvnw.cmd spring-boot:run -Dspring-boot.run.profiles=dev
+# ============================================================
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5432/aegiscloud
+    username: aegiscloud
+    password: aegiscloud
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 2
+      connection-timeout: 30000
+
+  data:
+    redis:
+      host: localhost
+      port: 6379
+      # No password for local Redis (dev only)
+      timeout: 2000ms
+
+server:
+  port: 8081
+
+logging:
+  level:
+    root: INFO
+    io.aegiscloud: DEBUG
+    io.fabric8: WARN
+    org.springframework.security: WARN
+    org.flywaydb: INFO
+
+# Kubernetes — local Docker Desktop context
+aegiscloud:
+  kubernetes:
+    context: docker-desktop
+    in-cluster: false
+
+  security:
+    jwt:
+      # 256-bit base64 dev secret — CHANGE IN PRODUCTION
+      secret: ZGV2LXNlY3JldC1rZXktZm9yLWxvY2FsLWRldmVsb3BtZW50LW9ubHktbm90LWZvci1wcm9kdWN0aW9u
+      expiration-ms: 86400000
+
+  cors:
+    allowed-origins:
+      - http://localhost:5173
+      - http://localhost:5174
+      - http://localhost:3000

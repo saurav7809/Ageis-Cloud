@@ -73,6 +73,40 @@ public class AuditLog {
         }
     }
 
+    /**
+     * Records an action initiated by an external system (CI/CD pipeline, webhook)
+     * rather than a human or the platform's own engines.
+     */
+    public void recordSystemAction(String action, String entityType, String entityId,
+                                   Map<String, Object> after) {
+        try {
+            // Use a nil org-id placeholder for system actions without a tenant context.
+            // A real deployment would derive the org from the webhook token.
+            UUID systemOrgId = UUID.fromString("00000000-0000-0000-0000-000000000000");
+            write(systemOrgId, null, "SYSTEM", action, entityType, entityId, null, after);
+        } catch (Exception e) {
+            log.error("AUDIT GAP: could not record system {} on {} {}: {}",
+                    action, entityType, entityId, e.getMessage());
+        }
+    }
+
+    /** Recent entries matching a specific action type, across all organisations. */
+    public List<AuditEntry> recentByAction(String action, int limit) {
+        return jdbc.query("""
+                SELECT e.id, e.actor_kind, COALESCE(u.email, 'system') AS actor,
+                       e.action, e.entity_type, e.entity_id, e.before_state, e.after_state,
+                       e.created_at
+                FROM audit_log_entry e
+                LEFT JOIN app_user u ON u.id = e.actor_id
+                WHERE e.action = ?
+                ORDER BY e.created_at DESC
+                LIMIT ?
+                """, (rs, i) -> new AuditEntry(
+                rs.getLong(1), rs.getString(2), rs.getString(3), rs.getString(4),
+                rs.getString(5), rs.getString(6), readMap(rs.getString(7)),
+                readMap(rs.getString(8)), rs.getTimestamp(9).toInstant()), action, limit);
+    }
+
     /** Records a change, keeping what it was as well as what it became. */
     public void recordChange(String action, String entityType, String entityId,
                              Map<String, Object> before, Map<String, Object> after) {

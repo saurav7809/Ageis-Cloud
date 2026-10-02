@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { ApiError, getGraph, type GraphView } from "../api/client";
 import { Badge, Card } from "../components/ui";
+import { useLiveRefresh } from "../components/LiveEvents";
 
 const SOURCE_TONE: Record<string, "good" | "warn" | "info"> = {
   // An edge proved by breaking a service is stronger evidence than one declared or
@@ -32,9 +33,11 @@ export function GraphPage({ token }: { token: string }) {
 
   useEffect(() => {
     refresh();
-    const timer = setInterval(refresh, 30000);
-    return () => clearInterval(timer);
   }, [refresh]);
+
+  // The graph changes when an experiment proves an edge, or when a service is
+  // registered. Both are events; neither is periodic.
+  useLiveRefresh(["dependency-discovered", "microservice-registered"], refresh);
 
   return (
     <>

@@ -15,6 +15,7 @@ import {
   type RegisterResult,
 } from "../api/client";
 import { Badge, Card, timeAgo } from "../components/ui";
+import { useLiveRefresh } from "../components/LiveEvents";
 
 const HEALTH_TONE: Record<Microservice["health"], "good" | "warn" | "bad" | "info"> = {
   HEALTHY: "good",
@@ -79,11 +80,14 @@ export function MicroservicesPage({
 
   useEffect(() => {
     refresh();
-    // Registered services change state on their own — a pod dies, a rollout
-    // finishes — so the list refreshes rather than freezing at page load.
-    const timer = setInterval(refresh, 15000);
-    return () => clearInterval(timer);
   }, [refresh]);
+
+  // A pod dying, a rollout finishing, a build completing, someone else registering
+  // a service — each arrives as an event rather than being noticed by a timer.
+  useLiveRefresh(
+    ["microservice-registered", "build", "healing", "scaling", "pod-unhealthy"],
+    refresh,
+  );
 
   useEffect(() => {
     if (reachable.length > 0 && !form.cluster) {
