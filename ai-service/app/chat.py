@@ -27,20 +27,28 @@ GEMINI_ENDPOINT = "https://generativelanguage.googleapis.com/v1beta/models/gemin
 # ── Intent patterns ──────────────────────────────────────────────────────────
 
 INTENTS: list[tuple[str, list[str]]] = [
-    ("status_overview",   ["overall status", "platform status", "how is everything", "summary", "overview"]),
-    ("degraded_services", ["degraded", "failing", "unhealthy", "down", "broken", "not working"]),
-    ("open_alerts",       ["alert", "alerts", "open alert", "critical", "warning"]),
-    ("scaling_events",    ["scaling", "scaled", "replica", "replicas", "scale up", "scale down"]),
-    ("slo_status",        ["slo", "error budget", "burn rate", "reliability"]),
+    ("greeting",       ["hi", "hello", "hey", "good morning", "good evening", "good afternoon", "howdy", "sup", "yo"]),
+    ("how_are_you",    ["how are you", "how r u", "you ok", "you good", "how's it going", "what's up", "whats up"]),
+    ("status_overview",   ["overall status", "platform status", "how is everything", "summary", "overview", "everything ok", "all good"]),
+    ("degraded_services", ["degraded", "failing", "unhealthy", "down", "broken", "not working", "problem", "issue"]),
+    ("open_alerts",       ["alert", "alerts", "open alert", "critical", "warning", "incident"]),
+    ("scaling_events",    ["scaling", "scaled", "replica", "replicas", "scale up", "scale down", "autoscal"]),
+    ("slo_status",        ["slo", "error budget", "burn rate", "reliability", "uptime"]),
     ("top_errors",        ["error rate", "errors", "failures", "failed requests"]),
-    ("cost",              ["cost", "spend", "monthly", "billing", "expensive"]),
-    ("clusters",          ["cluster", "clusters", "node", "nodes", "kubernetes"]),
-    ("help",              ["help", "what can you do", "commands", "capabilities"]),
+    ("cost",              ["cost", "spend", "monthly", "billing", "expensive", "budget"]),
+    ("clusters",          ["cluster", "clusters", "node", "nodes", "kubernetes", "k8s"]),
+    ("services",          ["service", "services", "microservice", "workload", "deployment"]),
+    ("help",              ["help", "what can you do", "commands", "capabilities", "features", "what do you know"]),
+    ("thanks",            ["thanks", "thank you", "thx", "ty", "great", "awesome", "nice", "cool", "good job", "perfect"]),
+    ("bye",               ["bye", "goodbye", "see you", "cya", "later", "exit", "quit"]),
 ]
 
 
 def match_intent(question: str) -> str:
-    q = question.lower()
+    q = question.lower().strip()
+    # Exact short greetings first
+    if q in ("hi", "hello", "hey", "sup", "yo", "hii", "hiii"):
+        return "greeting"
     for intent, keywords in INTENTS:
         if any(kw in q for kw in keywords):
             return intent
@@ -195,15 +203,79 @@ def answer_help() -> tuple[str, list[dict]]:
     return text, []
 
 
+
+def answer_greeting(ctx: dict) -> tuple[str, list[dict]]:
+    ov = ctx["overview"]
+    open_alerts = len([a for a in ctx["alerts"] if a.get("status") == "OPEN"])
+    healthy = ov.get("healthyClusters", "?")
+    total = ov.get("totalClusters", "?")
+    status = "all systems healthy ✅" if open_alerts == 0 else f"{open_alerts} open alert(s) need attention ⚠️"
+    return (
+        f"Hey there! 👋 I'm your **AegisCloud SRE Assistant**.\n\n"
+        f"Quick snapshot: **{healthy}/{total}** clusters healthy, {status}.\n\n"
+        "Ask me anything — alerts, costs, scaling events, SLOs, or cluster health!",
+        [{"label": "Clusters", "value": f"{healthy}/{total} healthy", "status": "good" if healthy == total else "warn"},
+         {"label": "Open Alerts", "value": str(open_alerts), "status": "good" if open_alerts == 0 else "bad"}]
+    )
+
+
+def answer_how_are_you(ctx: dict) -> tuple[str, list[dict]]:
+    open_alerts = len([a for a in ctx["alerts"] if a.get("status") == "OPEN"])
+    if open_alerts == 0:
+        return (
+            "All good here! 😎 The platform is running smoothly — no open alerts.\n\n"
+            "What would you like to check on?",
+            [{"label": "Platform Status", "value": "Healthy", "status": "good"}]
+        )
+    return (
+        f"Staying busy! There are **{open_alerts}** open alert(s) that need attention.\n\n"
+        "Want me to show you what's firing?",
+        [{"label": "Open Alerts", "value": str(open_alerts), "status": "bad"}]
+    )
+
+
+def answer_services(ctx: dict) -> tuple[str, list[dict]]:
+    ov = ctx["overview"]
+    replicas = ov.get("runningReplicas", "?")
+    return (
+        f"The platform is managing services across your registered clusters.\n\n"
+        f"- **Running replicas:** {replicas}\n"
+        f"- Open the **Microservices** page to see each service's health, image, and scaling config.\n"
+        f"- Use the **Golden Signals** page for a live health heatmap.",
+        [{"label": "Replicas Running", "value": str(replicas), "status": "good"}]
+    )
+
+
+def answer_thanks() -> tuple[str, list[dict]]:
+    return ("Happy to help! 🙌 Let me know if you need anything else about your platform.", [])
+
+
+def answer_bye() -> tuple[str, list[dict]]:
+    return ("See you! 👋 The platform keeps watching while you're away. Come back anytime.", [])
+
+
 async def answer_freeform(question: str, ctx: dict) -> tuple[str, list[dict]]:
+
     """Use Gemini for questions that don't match a known intent."""
     if not GEMINI_API_KEY:
+        # Helpful fallback without Gemini
+        ov = ctx["overview"]
+        open_alerts = len([a for a in ctx["alerts"] if a.get("status") == "OPEN"])
+        healthy = ov.get("healthyClusters", "?")
+        total = ov.get("totalClusters", "?")
+        replicas = ov.get("runningReplicas", "?")
         return (
-            "I'm not sure about that specific question. Try asking about:\n"
-            "- Platform status  •  Open alerts  •  Scaling events\n"
-            "- Cost  •  Clusters  •  SLO burn rates\n\n"
-            "*(Set GEMINI_API_KEY in the AI service environment to enable free-form answers.)*",
-            []
+            f"I can answer questions about your live platform. Here's a quick snapshot:\n\n"
+            f"- **{healthy}/{total}** clusters healthy\n"
+            f"- **{replicas}** replicas running\n"
+            f"- **{open_alerts}** open alert(s)\n\n"
+            "Try asking:\n"
+            "- *What's the platform status?*\n"
+            "- *Are there any open alerts?*\n"
+            "- *Show recent scaling events*\n"
+            "- *What's my monthly spend?*",
+            [{"label": "Clusters", "value": f"{healthy}/{total}", "status": "good" if healthy == total else "warn"},
+             {"label": "Alerts", "value": str(open_alerts), "status": "good" if open_alerts == 0 else "bad"}]
         )
 
     # Build a compact system context from live data
@@ -245,7 +317,15 @@ async def respond(question: str, token: str) -> dict:
     intent = match_intent(question)
     ctx = await fetch_context(token)
 
-    if intent == "status_overview":
+    if intent == "greeting":
+        text, cards = answer_greeting(ctx)
+    elif intent == "how_are_you":
+        text, cards = answer_how_are_you(ctx)
+    elif intent == "thanks":
+        text, cards = answer_thanks()
+    elif intent == "bye":
+        text, cards = answer_bye()
+    elif intent == "status_overview":
         text, cards = answer_status_overview(ctx)
     elif intent in ("degraded_services", "open_alerts", "top_errors"):
         text, cards = answer_degraded(ctx)
@@ -257,6 +337,8 @@ async def respond(question: str, token: str) -> dict:
         text, cards = answer_cost(ctx)
     elif intent == "clusters":
         text, cards = answer_clusters(ctx)
+    elif intent == "services":
+        text, cards = answer_services(ctx)
     elif intent == "help":
         text, cards = answer_help()
     else:

@@ -51,6 +51,7 @@ import { ClusterOnboardingPage } from "../pages/ClusterOnboardingPage";
 import { AiChatWidget } from "./AiChatWidget";
 import { DoraMetricsPage } from "../pages/DoraMetricsPage";
 import { GlobalSearch } from "./GlobalSearch";
+import { PostMortemPage } from "../pages/PostMortemPage";
 
 type Tab =
   | "microservices"
@@ -75,7 +76,8 @@ type Tab =
   | "slo-config"
   | "golden-signals"
   | "cluster-onboarding"
-  | "dora";
+  | "dora"
+  | "postmortem";
 
 const NAV: { id: Tab; label: string; icon: string }[] = [
   // Ordered as the platform works: register and run a service first, then the
@@ -103,6 +105,7 @@ const NAV: { id: Tab; label: string; icon: string }[] = [
   { id: "notifications", label: "Notifications", icon: "🔔" },
   { id: "alerts", label: "Alerts", icon: "△" },
   { id: "dora", label: "DORA Metrics", icon: "📊" },
+  { id: "postmortem", label: "Post-Mortem", icon: "📝" },
 ];
 
 interface Data {
@@ -326,6 +329,7 @@ function DashboardShell({
             {tab === "golden-signals" && <GoldenSignalsPage targets={data.targets} />}
             {tab === "cluster-onboarding" && <ClusterOnboardingPage token={token} />}
             {tab === "dora" && <DoraMetricsPage token={token} />}
+            {tab === "postmortem" && <PostMortemPage token={token} />}
 
           </>
         )}
