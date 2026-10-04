@@ -21,7 +21,7 @@ from __future__ import annotations
 from fastapi import FastAPI
 from pydantic import BaseModel, Field
 
-from app import anomaly, forecast, rca
+from app import anomaly, forecast, rca, chat
 
 app = FastAPI(
     title="AegisCloud AI Service",
@@ -162,3 +162,17 @@ def rerank(request: RcaRequest) -> dict:
             for index, item in enumerate(ranked)
         ]
     }
+class ChatRequest(BaseModel):
+    question: str = Field(..., description="Natural language question about the platform")
+    token: str = Field(..., description="Control-plane bearer token for live data")
+
+
+@app.post("/chat")
+async def ask(request: ChatRequest) -> dict:
+    """Answer a free-form SRE question using live platform data.
+
+    Pulls real context (alerts, metrics, scaling events) from the control
+    plane on every call so the answer always reflects the current state.
+    When GEMINI_API_KEY is set, unknown questions are escalated to Gemini.
+    """
+    return await chat.respond(request.question, request.token)

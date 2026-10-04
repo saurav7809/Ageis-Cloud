@@ -48,6 +48,7 @@ import { NotificationsPage } from "../pages/NotificationsPage";
 import { SloConfigPage } from "../pages/SloConfigPage";
 import { GoldenSignalsPage } from "../pages/GoldenSignalsPage";
 import { ClusterOnboardingPage } from "../pages/ClusterOnboardingPage";
+import { AiChatWidget } from "./AiChatWidget";
 
 type Tab =
   | "microservices"
@@ -216,6 +217,9 @@ function DashboardShell({
 
   return (
     <div style={{ display: "flex", flexDirection: "column", minHeight: "100vh" }}>
+      {/* Global AI Chat Widget — floats on every page */}
+      <AiChatWidget token={token} />
+
       {/* Top live activity strip */}
       <LiveActivityBar />
       <div className="layout" style={{ flex: 1 }}>
