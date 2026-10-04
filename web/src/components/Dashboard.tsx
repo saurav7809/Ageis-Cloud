@@ -49,6 +49,8 @@ import { SloConfigPage } from "../pages/SloConfigPage";
 import { GoldenSignalsPage } from "../pages/GoldenSignalsPage";
 import { ClusterOnboardingPage } from "../pages/ClusterOnboardingPage";
 import { AiChatWidget } from "./AiChatWidget";
+import { DoraMetricsPage } from "../pages/DoraMetricsPage";
+import { GlobalSearch } from "./GlobalSearch";
 
 type Tab =
   | "microservices"
@@ -72,7 +74,8 @@ type Tab =
   | "notifications"
   | "slo-config"
   | "golden-signals"
-  | "cluster-onboarding";
+  | "cluster-onboarding"
+  | "dora";
 
 const NAV: { id: Tab; label: string; icon: string }[] = [
   // Ordered as the platform works: register and run a service first, then the
@@ -99,6 +102,7 @@ const NAV: { id: Tab; label: string; icon: string }[] = [
   { id: "manifests", label: "Manifests", icon: "📄" },
   { id: "notifications", label: "Notifications", icon: "🔔" },
   { id: "alerts", label: "Alerts", icon: "△" },
+  { id: "dora", label: "DORA Metrics", icon: "📊" },
 ];
 
 interface Data {
@@ -227,6 +231,7 @@ function DashboardShell({
         <Brand size={26} />
 
         <nav className="nav">
+          <GlobalSearch token={token} onNavigate={(t) => setTab(t as Tab)} />
           {NAV.map((n) => (
             <button
               key={n.id}
@@ -320,6 +325,8 @@ function DashboardShell({
             {tab === "slo-config" && <SloConfigPage token={token} />}
             {tab === "golden-signals" && <GoldenSignalsPage targets={data.targets} />}
             {tab === "cluster-onboarding" && <ClusterOnboardingPage token={token} />}
+            {tab === "dora" && <DoraMetricsPage token={token} />}
+
           </>
         )}
       </main>

@@ -19,6 +19,7 @@ the code says which methods are in use rather than implying something grander.
 from __future__ import annotations
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
 from app import anomaly, forecast, rca, chat
@@ -27,6 +28,14 @@ app = FastAPI(
     title="AegisCloud AI Service",
     version="1.0.0",
     description="Anomaly detection, forecasting and RCA re-ranking over platform telemetry.",
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 
