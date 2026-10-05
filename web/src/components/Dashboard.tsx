@@ -79,34 +79,60 @@ type Tab =
   | "dora"
   | "postmortem";
 
-const NAV: { id: Tab; label: string; icon: string }[] = [
-  // Ordered as the platform works: register and run a service first, then the
-  // capabilities that only mean anything once one is running.
-  { id: "microservices", label: "Microservices", icon: "⬢" },
-  { id: "golden-signals", label: "Golden Signals", icon: "🔥" },
-  { id: "overview", label: "Overview", icon: "◎" },
-  { id: "metrics", label: "Metrics", icon: "▲" },
-  { id: "logs", label: "Logs", icon: "≡" },
-  { id: "clusters", label: "Clusters", icon: "▦" },
-  { id: "cluster-onboarding", label: "Add Cluster", icon: "➕" },
-  { id: "services", label: "Fleet detail", icon: "◈" },
-  { id: "control", label: "Control Plane", icon: "⟳" },
-  { id: "reliability", label: "Reliability", icon: "◔" },
-  { id: "slo-config", label: "SLO Config", icon: "🎯" },
-  { id: "graph", label: "Dependencies", icon: "⇄" },
-  { id: "diagnostics", label: "Diagnostics", icon: "◇" },
-  { id: "optimization", label: "Optimization", icon: "◐" },
-  { id: "cicd", label: "CI/CD", icon: "⊕" },
-  { id: "simulator", label: "Simulator", icon: "🧪" },
-  { id: "deploy", label: "Deploy", icon: "🚀" },
-  { id: "incidents", label: "Incidents", icon: "🚨" },
-  { id: "chaos", label: "Chaos", icon: "☠️" },
-  { id: "manifests", label: "Manifests", icon: "📄" },
-  { id: "notifications", label: "Notifications", icon: "🔔" },
-  { id: "alerts", label: "Alerts", icon: "△" },
-  { id: "dora", label: "DORA Metrics", icon: "📊" },
-  { id: "postmortem", label: "Post-Mortem", icon: "📝" },
+const NAV_SECTIONS: { section: string; items: { id: Tab; label: string; icon: string }[] }[] = [
+  {
+    section: "Overview",
+    items: [
+      { id: "overview",       label: "Overview",       icon: "◎" },
+      { id: "golden-signals", label: "Golden Signals",  icon: "🔥" },
+      { id: "metrics",        label: "Metrics",         icon: "▲" },
+      { id: "logs",           label: "Logs",            icon: "≡" },
+    ],
+  },
+  {
+    section: "Infrastructure",
+    items: [
+      { id: "clusters",          label: "Clusters",       icon: "▦" },
+      { id: "cluster-onboarding",label: "Add Cluster",    icon: "➕" },
+      { id: "microservices",     label: "Microservices",  icon: "⬢" },
+      { id: "services",          label: "Fleet Detail",   icon: "◈" },
+      { id: "manifests",         label: "Manifests",      icon: "📄" },
+      { id: "graph",             label: "Dependencies",   icon: "⇄" },
+    ],
+  },
+  {
+    section: "Reliability",
+    items: [
+      { id: "incidents",    label: "Incidents",     icon: "🚨" },
+      { id: "alerts",       label: "Alerts",        icon: "△" },
+      { id: "reliability",  label: "Reliability",   icon: "◔" },
+      { id: "slo-config",   label: "SLO Config",    icon: "🎯" },
+      { id: "diagnostics",  label: "Diagnostics",   icon: "◇" },
+      { id: "chaos",        label: "Chaos Eng.",    icon: "☠️" },
+    ],
+  },
+  {
+    section: "Automation",
+    items: [
+      { id: "control",      label: "Control Plane", icon: "⟳" },
+      { id: "cicd",         label: "CI / CD",       icon: "⊕" },
+      { id: "deploy",       label: "Deploy",         icon: "🚀" },
+      { id: "optimization", label: "Optimization",  icon: "◐" },
+      { id: "simulator",    label: "Simulator",     icon: "🧪" },
+    ],
+  },
+  {
+    section: "Analytics",
+    items: [
+      { id: "dora",         label: "DORA Metrics",  icon: "📊" },
+      { id: "postmortem",   label: "Post-Mortem",   icon: "📝" },
+      { id: "notifications",label: "Notifications", icon: "🔔" },
+    ],
+  },
 ];
+
+// Flat list for any code that still needs it
+const NAV = NAV_SECTIONS.flatMap(s => s.items);
 
 interface Data {
   overview: Overview;
@@ -224,38 +250,49 @@ function DashboardShell({
 
   return (
     <div style={{ display: "flex", flexDirection: "column", minHeight: "100vh" }}>
-      {/* Global AI Chat Widget — floats on every page */}
+      {/* AI Chat Widget — floats on every page */}
       <AiChatWidget token={token} />
 
-      {/* Top live activity strip */}
+      {/* Top activity bar */}
       <LiveActivityBar />
+
       <div className="layout" style={{ flex: 1 }}>
-      <aside className="sidebar">
-        <Brand size={26} />
-
-        <nav className="nav">
-          <GlobalSearch token={token} onNavigate={(t) => setTab(t as Tab)} />
-          {NAV.map((n) => (
-            <button
-              key={n.id}
-              className={`nav-item ${tab === n.id ? "active" : ""}`}
-              onClick={() => setTab(n.id)}
-            >
-              <span aria-hidden="true" style={{ width: 15 }}>
-                {n.icon}
-              </span>
-              {n.label}
-              {n.id === "alerts" && openAlerts > 0 && (
-                <span className="nav-count">{openAlerts}</span>
-              )}
-            </button>
-          ))}
-        </nav>
-
-        <div className="sidebar-foot">
-          <div className="avatar">
-            {(profile?.email ?? "?").charAt(0).toUpperCase()}
+        <aside className="sidebar">
+          {/* Brand + Search */}
+          <div className="sidebar-top">
+            <Brand size={24} />
+            <GlobalSearch token={token} onNavigate={(t) => setTab(t as Tab)} />
           </div>
+
+          {/* Grouped navigation */}
+          <nav className="nav">
+            {NAV_SECTIONS.map((section) => (
+              <div key={section.section}>
+                <div className="nav-section">{section.section}</div>
+                {section.items.map((n) => (
+                  <button
+                    key={n.id}
+                    className={`nav-item ${tab === n.id ? "active" : ""}`}
+                    onClick={() => setTab(n.id)}
+                  >
+                    <span className="nav-icon" aria-hidden="true">{n.icon}</span>
+                    {n.label}
+                    {n.id === "alerts" && openAlerts > 0 && (
+                      <span className="nav-count">{openAlerts}</span>
+                    )}
+                    {n.id === "incidents" && openAlerts > 0 && (
+                      <span className="nav-count">{openAlerts}</span>
+                    )}
+                  </button>
+                ))}
+              </div>
+            ))}
+          </nav>
+
+          <div className="sidebar-foot">
+            <div className="avatar">
+              {(profile?.email ?? "?").charAt(0).toUpperCase()}
+            </div>
           <div className="who">
             <div className="who-email">{profile?.email ?? "…"}</div>
             <div className={`live-dot ${connected ? "live-on" : "live-off"}`}>
