@@ -1,40 +1,48 @@
-# Ignored files
+# ── Environment ───────────────────────────────────────────
 .env
+.env.*
 *.env.local
 
-# Backend
+# ── Java / Maven build output ─────────────────────────────
+control-plane/target/
+control-plane/.mvn/wrapper/maven-wrapper.jar
 backend/target/
-backend/.mvn/
 *.class
 *.jar
+!**/test/*.jar
 
-# Frontend
-frontend/node_modules/
-frontend/dist/
-frontend/.next/
-frontend/.vite/
+# ── Frontend ──────────────────────────────────────────────
+**/node_modules/
+**/dist/
+**/.next/
+**/.vite/
+web/node_modules/
+web/dist/
 
-# IDE
+# ── Python ────────────────────────────────────────────────
+**/__pycache__/
+**/*.pyc
+**/*.pyo
+ai-service/.venv/
+ai-service/venv/
+
+# ── IDE / Editor ──────────────────────────────────────────
 .idea/
 *.iml
 .vscode/
 *.swp
 *.swo
+*.code-workspace
 
-# OS
+# ── OS ────────────────────────────────────────────────────
 .DS_Store
 Thumbs.db
+desktop.ini
 
-# Logs
+# ── Logs ──────────────────────────────────────────────────
 *.log
 logs/
 
-# Docker volumes data
+# ── Docker volumes ────────────────────────────────────────
 postgres_data/
 redis_data/
-
-# AI Service
-ai-service/__pycache__/
-ai-service/.venv/
-ai-service/*.pyc
-ai-service/venv/
